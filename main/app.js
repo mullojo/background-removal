@@ -51,6 +51,7 @@ createApp({
     let imageBitmap = null
     let cutoutCanvas = null
     let requestId = 0
+    let activeRequest = null
     let queuedFile = null
     let sourceFile = null
     let cutoutBlob = null
@@ -92,6 +93,20 @@ createApp({
       const context = canvas.getContext('2d', options)
       if (!context) throw new Error('The browser could not allocate image memory. Try a smaller photo.')
       return context
+    }
+    async function createPreview(image) {
+      const scale = Math.min(1, 1280 / Math.max(image.width, image.height))
+      const canvas = document.createElement('canvas')
+      canvas.width = Math.max(1, Math.round(image.width * scale))
+      canvas.height = Math.max(1, Math.round(image.height * scale))
+      try {
+        const context = context2d(canvas)
+        context.imageSmoothingQuality = 'high'
+        context.drawImage(image, 0, 0, canvas.width, canvas.height)
+        const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'))
+        if (!blob) throw new Error('Could not create the image preview. Try a smaller photo.')
+        return { blob, width: canvas.width, height: canvas.height }
+      } finally { releaseCanvas(canvas) }
     }
     function mark(stage, details = {}, active = true) {
       diagnostics.record(stage, details, { stage, active })
@@ -196,10 +211,10 @@ createApp({
         }
       } else if (data.type === 'ready') {
         backend.value = data.backend
-        phase.value = imageBitmap ? 'processing' : 'ready'
+        phase.value = activeRequest === requestId ? 'processing' : 'ready'
         statusDetail.value = `ORMBG loaded on ${backend.value}. Ready to process.`
         downloadProgress.value = null
-        mark('model-ready', { backend: data.backend }, Boolean(imageBitmap))
+        mark('model-ready', { backend: data.backend }, activeRequest === requestId)
         refreshCache()
       } else if (data.type === 'processing') {
         if (data.id !== requestId) return
@@ -226,6 +241,7 @@ createApp({
 
     function fail(cause) {
       clearTimeout(slowTimer)
+      activeRequest = null
       mark('error', errorDetails(cause), false)
       console.error('[Cutout]', cause)
       imageBitmap?.close()
@@ -239,6 +255,7 @@ createApp({
 
     function cancelRun() {
       requestId += 1
+      activeRequest = null
       clearTimeout(slowTimer)
       queuedFile = null
       worker?.terminate()
@@ -266,6 +283,7 @@ createApp({
       if (busy.value) { queuedFile = file; return }
       if (!file.type.startsWith('image/')) { fail(new Error('Choose a JPG, PNG, WebP, or other browser-supported image.')); return }
       const id = ++requestId
+      activeRequest = id
       sourceFile = file
       phase.value = 'preparing'
       statusDetail.value = 'Preparing a smaller model input; your export keeps the original dimensions…'
@@ -290,21 +308,36 @@ createApp({
         const decoded = await createImageBitmap(file, { imageOrientation: 'from-image' })
         if (id !== requestId) { decoded.close(); return }
         imageBitmap = decoded
-        originalUrl.value = URL.createObjectURL(file)
         fileName.value = file.name
         dimensions.value = `${imageBitmap.width.toLocaleString()} × ${imageBitmap.height.toLocaleString()} px`
         showOriginal.value = false
         diagnostics.record('image-decoded', { width: decoded.width, height: decoded.height }, { image: { type: file.type, bytes: file.size, width: decoded.width, height: decoded.height } })
         const input = document.createElement('canvas')
+        const decodedRGBABytesEstimate = decoded.width * decoded.height * 4
         input.width = 1024
         input.height = 1024
         let pixels
+        let preview
         try {
           const context = context2d(input, { willReadFrequently: true })
           context.imageSmoothingQuality = 'high'
           context.drawImage(imageBitmap, 0, 0, input.width, input.height)
           pixels = context.getImageData(0, 0, input.width, input.height).data
-        } finally { releaseCanvas(input) }
+          releaseCanvas(input)
+          mark('original-preview-encoding')
+          preview = await createPreview(decoded)
+        } finally {
+          releaseCanvas(input)
+          decoded.close()
+          if (imageBitmap === decoded) imageBitmap = null
+        }
+        if (id !== requestId) return
+        originalUrl.value = URL.createObjectURL(preview.blob)
+        mark('original-released-before-inference', {
+          decodedRGBABytesEstimate,
+          previewWidth: preview.width,
+          previewHeight: preview.height,
+        })
         mark('model-input-ready', { width: 1024, height: 1024, forceWasm })
         phase.value = backend.value ? 'processing' : 'loading'
         statusDetail.value = backend.value ? 'Sending photo to the model…' : 'Loading model before processing…'
@@ -325,9 +358,13 @@ createApp({
 
     async function compose(mask) {
       const id = requestId
-      if (!imageBitmap) throw new Error('The original photo is no longer available. Please choose it again.')
-      const bitmap = imageBitmap
+      if (!sourceFile) throw new Error('The original photo is no longer available. Please choose it again.')
+      mark('export-image-decoding')
+      const bitmap = await createImageBitmap(sourceFile, { imageOrientation: 'from-image' })
+      if (id !== requestId) { bitmap.close(); return }
+      imageBitmap = bitmap
       const { width, height } = bitmap
+      mark('export-image-decoded', { width, height })
       const maskCanvas = document.createElement('canvas')
       const output = document.createElement('canvas')
       try {
@@ -361,11 +398,15 @@ createApp({
         throw new Error('Could not create the transparent image.')
       }
       revoke(resultUrl.value)
-      resultUrl.value = URL.createObjectURL(blob)
+      mark('result-preview-encoding')
+      const preview = await createPreview(output)
+      if (id !== requestId) { releaseCanvas(output); return }
+      resultUrl.value = URL.createObjectURL(preview.blob)
       cutoutBlob = blob
       await updateExport()
       if (id !== requestId || phase.value === 'error') return
       phase.value = 'complete'
+      activeRequest = null
       statusDetail.value = `Background removed on ${backend.value}. Choose a backdrop, then download or share your image.`
       mark('complete', { pngBytes: exportFile?.size }, false)
       if (queuedFile) { const next = queuedFile; queuedFile = null; await acceptFile(next) }
