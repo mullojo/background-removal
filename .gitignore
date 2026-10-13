@@ -1,0 +1,4 @@
+# Generated files and local operating-system metadata
+.DS_Store
+**/dist/
+**/node_modules/
