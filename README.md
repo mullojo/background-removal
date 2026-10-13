@@ -54,14 +54,16 @@ The `ViTFeatureExtractor` name in the [conversion's preprocessing config](https:
 
 | Step | What happens |
 | --- | --- |
-| Prepare | Transformers.js resizes the RGB photo to 1024 × 1024 and rescales values to 0–1. The published preprocessing config does not apply mean/std normalization. |
+| Prepare | The main app draws a 1024 × 1024 model input and transfers its pixels to the worker. Transformers.js converts it to RGB and rescales values to 0–1. The published preprocessing config does not apply mean/std normalization. |
 | Predict | IS-Net estimates a soft foreground mask, rather than classifying the photo or generating a new image. |
 | Restore size | Our worker extracts the foreground mask from the pipeline result, and the app resizes that mask to the original photo dimensions. |
-| Export | The app applies the mask to the original pixels, then optionally composites a selected color or gradient and saves a full-resolution PNG. |
+| Export | The app applies the mask to the original photo with Canvas compositing, then optionally adds a selected color or gradient and creates a full-resolution PNG for download or native file sharing. |
 
 The stable implementation lives in [`main/model.worker.js`](main/model.worker.js) and [`main/app.js`](main/app.js); the Vite edition is preserved separately in [`archive/ormbg-vite-wasm/src/`](archive/ormbg-vite-wasm/src/). The worker runs the `background-removal` pipeline on WebGPU with FP16 weights when possible. It switches to WASM with Q8 weights if GPU loading or inference fails. The corresponding [ONNX files](https://huggingface.co/onnx-community/ormbg-ONNX/tree/main/onnx) are approximately 88.1 MB and 44.3 MB. The model downloads on first use and is kept in this browser origin's Cache Storage until the user clears it. The original photo is processed in the browser.
 
 ORMBG's upstream model card describes its human-focused training and research. Results on products, animals, transparent objects, or crowded scenes should be assessed with representative images before making quality claims. WebGPU was faster in our local comparisons, while WASM provides a fallback for unsupported or incompatible GPU paths. Performance varies by browser and device.
+
+The stable app includes **Share / Save…**, when file sharing is supported, and **Help & diagnostics** for mobile troubleshooting. See [mobile testing notes](docs/MOBILE_TESTING.md) for capturing failures and trying WASM after an interrupted session.
 
 ### Sources and credit
 

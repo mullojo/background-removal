@@ -37,7 +37,7 @@
             </div>
             <template v-else>
               <div v-if="resultUrl && !showOriginal && selected === 'transparent'" class="checkerboard"></div>
-              <img class="stage-image" :src="resultUrl && !showOriginal ? resultUrl : originalUrl" :alt="resultUrl && !showOriginal ? 'Photo with background removed' : 'Original uploaded photo'" />
+              <img class="stage-image" :src="resultUrl && !showOriginal ? resultUrl : originalUrl" :alt="resultUrl && !showOriginal ? 'Photo with background removed' : 'Original uploaded photo'" @error="previewError" />
               <div v-if="busy" class="processing-shade"><span class="spinner"></span><strong>{{ stageText }}</strong><small>{{ statusDetail }}</small></div>
               <span class="image-badge">{{ resultUrl && !showOriginal ? 'AFTER' : 'BEFORE' }}</span>
             </template>
@@ -51,15 +51,20 @@
             <div class="status-card" role="status" aria-live="polite"><div class="status-icon" :class="{ spinning: busy }">✳</div><div class="status-copy"><strong>{{ stageText }}</strong><span>{{ statusDetail }}</span></div></div>
             <div v-if="phase === 'loading' && downloadProgress !== null" class="progress-wrap"><div class="progress-track"><span :style="{ width: `${downloadProgress}%` }"></span></div><small>{{ downloadFile }} · {{ downloadProgress }}%</small></div>
             <p v-if="error" class="error-text">{{ error }}</p>
+            <button v-if="busy && !exportBusy && phase !== 'compositing'" class="text-action" @click="cancelRun">Stop processing</button>
+            <button v-if="phase === 'error' && originalUrl && !busy" class="button button-outline full" @click="retryWasm">Retry with WASM <span aria-hidden="true">↗</span></button>
             <button v-if="!backend && !busy" class="button button-outline full" @click="loadModel">Load model ahead of time <span aria-hidden="true">↗</span></button>
           </div>
 
           <div class="control-section backdrop-section"><span class="section-index">03 / FINISH</span><div class="section-title-row"><div><h2>Choose a backdrop</h2><p class="section-description">Preview a look, then export it as a PNG.</p></div></div>
             <div class="swatch-grid" role="group" aria-label="Background choices"><button v-for="choice in choices" :key="choice.id" class="swatch" :class="{ selected: selected === choice.id }" :aria-pressed="selected === choice.id" @click="selectBackground(choice.id)"><span class="swatch-color" :class="{ checkered: choice.kind === 'transparent' }" :style="choice.kind === 'solid' ? { background: choice.color } : choice.kind === 'gradient' ? { background: `linear-gradient(135deg, ${choice.colors.join(', ')})` } : {}"><span v-if="selected === choice.id" class="swatch-check">✓</span></span><span>{{ choice.name }}</span></button></div>
-            <div class="export-box"><div><strong>Ready for the final touch?</strong><span>Full resolution · PNG</span></div><a v-if="exportUrl && !busy" class="button button-accent" :href="exportUrl" :download="`${fileName.replace(/\.[^.]+$/, '') || 'image'}-${selected}.png`"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M8 2v8m0 0 3-3m-3 3L5 7M3 12v2h10v-2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg> Download image</a><button v-else class="button button-accent" disabled>Download image</button></div>
+            <div class="export-box"><div><strong>Ready for the final touch?</strong><span>Full resolution · PNG</span></div><div class="export-actions"><a v-if="exportUrl && !busy" class="button button-accent" :href="exportUrl" :download="`${fileName.replace(/\.[^.]+$/, '') || 'image'}-${selected}.png`">Download image</a><button v-else class="button button-accent" disabled>Download image</button><button v-if="canShareFile" class="button button-share" :disabled="busy || shareBusy" @click="shareImage">{{ shareBusy ? 'Sharing…' : 'Share / Save…' }}</button></div></div>
+            <p v-if="canShareFile" class="section-description">On iPhone, choose Save Image in the share sheet to save to Photos when available.</p>
+            <p v-if="exportMessage" class="section-description" role="status">{{ exportMessage }}</p>
           </div>
 
           <div class="cache-section"><div class="cache-top"><span class="section-index">MODEL STORAGE</span><span class="cache-indicator"></span></div><p>Saved in this browser’s <strong>Cache Storage</strong> for <code>{{ origin }}</code>. Find it in Developer Tools → Application → Cache Storage → <code>{{ CACHE_KEY }}</code>.</p><div class="cache-footer"><span>{{ cacheAvailable ? `${cacheFiles} cached files · ${cacheFiles ? cacheSize : 'No model saved yet'}` : 'Cache Storage unavailable' }}</span><button :disabled="!cacheFiles || busy" @click="clearCache">Clear model cache ↗</button></div></div>
+          <details class="diagnostics-section" :open="Boolean(interruptedNotice)"><summary>Help &amp; diagnostics</summary><p v-if="interruptedNotice" class="section-description">{{ interruptedNotice }}</p><p class="section-description">Copy processing steps, image dimensions, browser details, and errors. Photos and filenames are not included. The latest steps are saved in this browser to help after an unexpected reload.</p><label class="wasm-option"><input type="checkbox" v-model="preferWasm" :disabled="busy"> Use WASM for the next run</label><button class="button button-outline full" @click="copyDiagnostics">Copy diagnostics <span aria-hidden="true">↗</span></button><p v-if="diagnosticMessage" class="section-description" role="status">{{ diagnosticMessage }}</p><textarea v-if="diagnosticText" class="diagnostic-report" aria-label="Diagnostic report" :value="diagnosticText" readonly @focus="$event.target.select()"></textarea><small>App {{ APP_VERSION }}</small></details>
         </aside>
       </div>
       <footer class="page-footer"><span>Made for simple, private image making.</span><span>POWERED BY TRANSFORMERS.JS + ORMBG</span></footer>

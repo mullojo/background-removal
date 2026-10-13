@@ -2,12 +2,13 @@
 
 **[Open the live app](https://background-removal.pages.dev/)** · [MIT License](../LICENSE)
 
-The stable no-build Cutout app, organized as four editable files:
+The stable no-build Cutout app, organized as five editable files:
 
 - `index.html` — the Vue template and CDN links
 - `style.css` — the original design styles
 - `app.js` — Vue 3 application state and image export
 - `model.worker.js` — Transformers.js model loading and inference
+- `diagnostics.js` — bounded local processing logs and recovery after an interrupted session
 
 No npm install, bundler, compilation, or build command is needed. Vue 3, Tailwind CSS 4, and Transformers.js load from versioned CDNs. The first visit needs an internet connection for those libraries and the ORMBG model. Photos are processed locally in the browser.
 
@@ -27,3 +28,13 @@ The model is cached in the browser's Cache Storage for this origin. The **Model 
 Model: [onnx-community/ormbg-ONNX](https://huggingface.co/onnx-community/ormbg-ONNX), Apache 2.0. The app uses Transformers.js **4.3.0**. It first tries **WebGPU with FP16** weights (about 88.1 MB). If WebGPU is absent or fails during loading or processing, it retries with **WASM and Q8** weights (about 44.3 MB). The status panel shows which engine loaded. A fallback downloads a separate model file on first use. Earlier Vite editions are indexed in [`../archive/README.md`](../archive/README.md).
 
 For the model architecture and the browser processing flow, see the [main project README](../README.md#ormbg-model-architecture).
+
+## Mobile saving and troubleshooting
+
+**Download image** saves the selected PNG. On browsers that support sharing image files, **Share / Save…** opens the native share sheet. On iPhone, choose **Save Image** to save to Photos when that action is available. The shared file includes the selected transparent, solid-color, or gradient background.
+
+Open **Help & diagnostics → Copy diagnostics** to copy browser details, image dimensions/type/size, processing stages, backend, and captured errors. Photos and filenames are not included. Recent steps are stored locally in this browser, so an unfinished earlier session can be included after reopening the page. A full browser process crash may not deliver a JavaScript error; the last recorded stage helps narrow it down. Nothing is sent automatically.
+
+Use **Stop processing** if a run stalls. After a handled error, **Retry with WASM** reloads the model on the CPU backend. After a full-page crash, reopen the page and enable **Use WASM for the next run** under diagnostics before choosing the image again. This option lasts for the current page session.
+
+To reduce memory use, the app sends a 1024 × 1024 pixel buffer to the worker, applies its soft mask using Canvas compositing, and releases temporary canvases. Exports retain the original photo dimensions. Very large photos and device/runtime limits can still cause failures. See [mobile testing notes](../docs/MOBILE_TESTING.md).
