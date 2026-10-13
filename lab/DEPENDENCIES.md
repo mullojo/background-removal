@@ -59,6 +59,6 @@ These times exclude model download/loading and final PNG compositing. They are o
 
 ## Publication notes
 
-The app's own source has no project license file in this folder yet; choose one before publishing a repository. Vue, Tailwind, Transformers.js, ORMBG, and MODNet have the licenses linked above. BRIA's [model card](https://huggingface.co/briaai/RMBG-1.4) says the model is source-available for non-commercial use and requires a separate commercial agreement for commercial use. Publishing the code and offering a funded service are different decisions; review BRIA's terms and decide whether to exclude that model from a public or gift-supported release.
+The app's own source is covered by the project's [MIT License](../LICENSE). Vue, Tailwind, Transformers.js, ORMBG, and MODNet have the licenses linked above. BRIA's [model card](https://huggingface.co/briaai/RMBG-1.4) says the model is source-available for non-commercial use and requires a separate commercial agreement for commercial use. Publishing the code and offering a funded service are different decisions; review BRIA's terms and decide whether to exclude that model from a public or gift-supported release.
 
 For a repeatable release, capture the exact model repository revisions, run the five options on representative photos and browsers, and check the actual network and cache behavior after deployment. The present document records the working local milestone.

@@ -34,9 +34,9 @@ The model downloads are stored in the browser Cache Storage for the exact site o
 
 ## Publishing notes
 
-See [repository and hosting setup](docs/PUBLISHING.md) for GitHub Desktop fields, an initial commit message, and the proposed Cloudflare Pages settings. Hosted demo links will be added here after deployment.
+See [repository and hosting setup](docs/PUBLISHING.md) for the GitHub Desktop workflow and Cloudflare Pages settings. Hosted demo links will be added here after deployment.
 
-`main/` uses the [ORMBG ONNX model](https://huggingface.co/onnx-community/ormbg-ONNX), listed as Apache 2.0. `lab/` includes BRIA RMBG 1.4 for evaluation; its [separate license](https://huggingface.co/briaai/RMBG-1.4) restricts commercial use. See [lab model notes](lab/MODEL_NOTES.md) and [lab dependencies](lab/DEPENDENCIES.md) before publishing or adding funding. This project does not yet include a license for its own source code; select one before publishing the repository.
+The project's source is released under the [MIT License](LICENSE). Third-party libraries and model weights retain their own licenses. `main/` uses the [ORMBG ONNX model](https://huggingface.co/onnx-community/ormbg-ONNX), listed as Apache 2.0. `lab/` includes BRIA RMBG 1.4 for evaluation; its [separate license](https://huggingface.co/briaai/RMBG-1.4) restricts commercial use. See [lab model notes](lab/MODEL_NOTES.md) and [lab dependencies](lab/DEPENDENCIES.md) for the model and library details.
 
 The Vite `dist/` folders are retained locally but ignored by Git because they are generated output. Their source and lockfiles remain available to rebuild them. `.DS_Store` and installed dependencies are also ignored.
 
