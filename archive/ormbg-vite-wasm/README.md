@@ -4,15 +4,17 @@ Historical version using Vue 3 + Tailwind CSS 4 + Transformers.js 3.8.1. The cur
 
 ## Run locally
 
+With Node.js and pnpm installed:
+
 ```bash
 cd archive/ormbg-vite-wasm  # from the project root
-npm install
-npm run dev
+pnpm install --frozen-lockfile
+pnpm dev
 ```
 
-Open the local URL shown by Vite (normally `http://127.0.0.1:5173`). The app has an `index.html`, but browser workers and model loading require a local HTTP server; double-clicking the file will not work. `npm run build` creates a static `dist/` folder that can be served locally with `npm run preview`.
+Open the local URL shown by Vite (normally `http://127.0.0.1:5173`). The app has an `index.html`, but browser workers and model loading require a local HTTP server; double-clicking the file will not work. `pnpm build` creates a static `dist/` folder that can be served locally with `pnpm preview`.
 
-To run the included built version without installing Node packages:
+If a local `dist/` build is available, it can be served without installing Node packages. Generated builds are excluded from Git; after cloning, run the install command above and `pnpm build` to create one first. From the project root:
 
 ```bash
 cd archive/ormbg-vite-wasm/dist  # from the project root

@@ -1,6 +1,6 @@
 # Background removal model lab: milestone and dependencies
 
-Milestone recorded 2026-10-06. This document describes the `lab/` no-build image lab. It is a snapshot for a possible future repository, not a release announcement.
+Milestone recorded 2026-10-06. This document describes the `lab/` no-build image lab and records the dependency versions and local test observations from that milestone. The app source is now published under MIT, and the [hosted lab](https://background-removal-lab.pages.dev/) is available for comparison.
 
 ## What the app does
 

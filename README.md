@@ -2,6 +2,8 @@
 
 A local browser tool for removing the background from a photo, previewing a transparent, solid-color, or gradient backdrop, and downloading a full-resolution PNG. The photo is processed in your browser. The interface uses Vue 3 and Tailwind CSS 4; inference runs in a Web Worker through Transformers.js.
 
+**[Try the live app](https://background-removal.pages.dev/)** · **[Explore the model lab](https://background-removal-lab.pages.dev/)** — hosted on Cloudflare Pages.
+
 This folder can stand alone now and can later sit inside a larger collection of photo and video tools. It contains only the photo background-removal project.
 
 ## Versions
@@ -34,7 +36,7 @@ The model downloads are stored in the browser Cache Storage for the exact site o
 
 ## Publishing notes
 
-See [repository and hosting setup](docs/PUBLISHING.md) for the GitHub Desktop workflow and Cloudflare Pages settings. Hosted demo links will be added here after deployment.
+The stable app and comparison lab are both live at the links above. See [repository and hosting setup](docs/PUBLISHING.md) for the GitHub Desktop workflow and Cloudflare Pages settings.
 
 The project's source is released under the [MIT License](LICENSE). Third-party libraries and model weights retain their own licenses. `main/` uses the [ORMBG ONNX model](https://huggingface.co/onnx-community/ormbg-ONNX), listed as Apache 2.0. `lab/` includes BRIA RMBG 1.4 for evaluation; its [separate license](https://huggingface.co/briaai/RMBG-1.4) restricts commercial use. See [lab model notes](lab/MODEL_NOTES.md) and [lab dependencies](lab/DEPENDENCIES.md) for the model and library details.
 
@@ -54,7 +56,7 @@ The `ViTFeatureExtractor` name in the [conversion's preprocessing config](https:
 | --- | --- |
 | Prepare | Transformers.js resizes the RGB photo to 1024 × 1024 and rescales values to 0–1. The published preprocessing config does not apply mean/std normalization. |
 | Predict | IS-Net estimates a soft foreground mask, rather than classifying the photo or generating a new image. |
-| Restore size | Transformers.js returns an RGBA cutout. Our worker takes its alpha channel, and the app resizes that mask to the original photo dimensions. |
+| Restore size | Our worker extracts the foreground mask from the pipeline result, and the app resizes that mask to the original photo dimensions. |
 | Export | The app applies the mask to the original pixels, then optionally composites a selected color or gradient and saves a full-resolution PNG. |
 
 The stable implementation lives in [`main/model.worker.js`](main/model.worker.js) and [`main/app.js`](main/app.js); the Vite edition is preserved separately in [`archive/ormbg-vite-wasm/src/`](archive/ormbg-vite-wasm/src/). The worker runs the `background-removal` pipeline on WebGPU with FP16 weights when possible. It switches to WASM with Q8 weights if GPU loading or inference fails. The corresponding [ONNX files](https://huggingface.co/onnx-community/ormbg-ONNX/tree/main/onnx) are approximately 88.1 MB and 44.3 MB. The model downloads on first use and is kept in this browser origin's Cache Storage until the user clears it. The original photo is processed in the browser.

@@ -1,5 +1,7 @@
 # Cutout — main no-build app
 
+**[Open the live app](https://background-removal.pages.dev/)** · [MIT License](../LICENSE)
+
 The stable no-build Cutout app, organized as four editable files:
 
 - `index.html` — the Vue template and CDN links
