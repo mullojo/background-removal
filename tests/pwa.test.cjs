@@ -89,31 +89,43 @@ function events(properties = {}) {
   })
 }
 
-test('install, connectivity, and update controls preserve an active image session', async () => {
-  let reloads = 0, busy = true, prompted = 0, prevented = 0
+test('automatic updates preserve active images, processing, and sharing', async () => {
+  let reloads = 0, busy = true, hasImage = true, prompted = 0, prevented = 0, checks = 0
   const changes = [], diagnostics = [], messages = []
   const media = events({ matches: false })
-  const registration = events({ scope: 'https://cutout.example/', installing: null, waiting: { postMessage: data => messages.push(data) } })
+  const registration = events({ scope: 'https://cutout.example/', installing: null, waiting: { postMessage: data => messages.push(data) }, update: async () => { checks++ } })
   const service = events({ controller: {}, ready: Promise.resolve(registration), register: async () => registration })
   const navigator = { onLine: true, serviceWorker: service }
   const window = events({ isSecureContext: true, matchMedia: () => media, location: { reload() { reloads++ } } })
   const source = fs.readFileSync(path.join(root, 'main/pwa.js'), 'utf8')
     .replace('export function', 'function').replace('import.meta.url', JSON.stringify('https://cutout.example/pwa.js'))
-  const context = vm.createContext({ window, navigator, URL })
+  const document = events({ visibilityState: 'visible' })
+  const context = vm.createContext({ window, navigator, document, URL, setInterval, clearInterval })
   vm.runInContext(source, context)
-  const pwa = context.createPwa({ onChange: value => changes.push(value), onDiagnostic: (...args) => diagnostics.push(args), isBusy: () => busy })
+  const pwa = context.createPwa({ onChange: value => changes.push(value), onDiagnostic: (...args) => diagnostics.push(args), isBusy: () => busy, hasImage: () => hasImage })
   await new Promise(resolve => setImmediate(resolve))
   assert.equal(changes.at(-1).offlineReady, true)
   assert.equal(changes.at(-1).updateAvailable, true)
-  service.emit('controllerchange')
-  assert.equal(reloads, 0, 'Do not automatically reload a tab when another tab updates')
-  pwa.update()
+  pwa.tryUpdate()
   assert.equal(messages.length, 0, 'Do not update during processing or sharing')
   busy = false
-  pwa.update()
+  pwa.tryUpdate()
+  assert.equal(messages.length, 0, 'An exported photo must remain available until Start over')
+  hasImage = false
+  pwa.tryUpdate()
   assert.equal(messages[0].type, 'ACTIVATE_UPDATE')
+  pwa.tryUpdate()
+  assert.equal(messages.length, 1, 'Request activation only once')
+  hasImage = true
   service.emit('controllerchange')
+  assert.equal(reloads, 0, 'A photo selected during activation must survive until cleared')
+  hasImage = false
+  pwa.tryUpdate()
   assert.equal(reloads, 1)
+  pwa.tryUpdate()
+  assert.equal(reloads, 1, 'Reload only once per update')
+  window.emit('focus')
+  assert.equal(checks, 1, 'Repeated focus events must not flood update checks')
   navigator.onLine = false
   window.emit('offline')
   assert.equal(changes.at(-1).offline, true)
@@ -133,6 +145,30 @@ test('install, connectivity, and update controls preserve an active image sessio
   const count = changes.length
   window.emit('offline')
   assert.equal(changes.length, count)
+})
+
+test('first installation does not reload, while another window’s update waits for an image to close', async () => {
+  let reloads = 0, image = false, clock = 100000, interval
+  const registration = events({ scope: 'https://cutout.example/', installing: null, waiting: null, update: async () => {} })
+  const service = events({ controller: null, ready: Promise.resolve(registration), register: async () => registration })
+  const navigator = { onLine: true, serviceWorker: service }
+  const window = events({ isSecureContext: true, matchMedia: () => events({ matches: false }), location: { reload() { reloads++ } } })
+  const document = events({ visibilityState: 'visible' })
+  const context = vm.createContext({ window, navigator, document, URL, Date: { now: () => clock }, setInterval: fn => { interval = fn; return 1 }, clearInterval() {} })
+  vm.runInContext(fs.readFileSync(path.join(root, 'main/pwa.js'), 'utf8').replace('export function', 'function').replace('import.meta.url', JSON.stringify('https://cutout.example/pwa.js')), context)
+  const pwa = context.createPwa({ onChange() {}, onDiagnostic() {}, isBusy: () => false, hasImage: () => image })
+  await new Promise(resolve => setImmediate(resolve))
+  service.controller = {}
+  service.emit('controllerchange')
+  assert.equal(reloads, 0)
+  image = true
+  service.emit('controllerchange')
+  assert.equal(reloads, 0)
+  image = false
+  clock += 300000
+  interval()
+  assert.equal(reloads, 1)
+  pwa.dispose()
 })
 
 test('manifest and icon files remain portable and have the advertised PNG sizes', () => {

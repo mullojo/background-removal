@@ -40,8 +40,11 @@ Each project serves its selected app at its own site root. Both demo links are i
 
 The stable output directory now includes the PWA manifest, service worker, icons,
 and bundled UI runtimes. Publish the whole `main/` directory. After editing cached
-app files, bump `RELEASE` in `main/service-worker.js` before committing. Existing
-visitors may see **Update app** when the new shell is ready. See [PWA.md](PWA.md).
+app files, prepare the release with `node scripts/release.mjs patch` (or
+minor/major) before committing. The app applies waiting updates automatically
+when no photo is open. GitHub Actions publishes the matching tag and release
+after a versioned push passes checks. See [PWA.md](PWA.md) and
+[VERSIONING.md](VERSIONING.md).
 
 Use the HTTPS demo URLs for mobile testing. The stable app prefers WebGPU FP16 and falls back to WASM Q8 if GPU loading or inference fails. The lab exposes backend choices explicitly and reports failures. Test download progress, inference, export, and cache clearing on the target mobile browsers before publishing performance claims.
 

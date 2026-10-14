@@ -9,5 +9,6 @@ build step. Preserve the upstream license notices when copying this project.
 | `tailwind-browser-4.3.3.js` | https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4.3.3 | MIT, `TAILWIND-LICENSE.txt` |
 
 To update, download the intended pinned release and its license, update the HTML
-or module import and the service worker's file list, and bump the shell release.
+or module import and the service worker's file list, then prepare a version bump
+with `node scripts/release.mjs patch` from the repository root.
 Transformers.js and model weights remain remote and are not bundled here.

@@ -1,10 +1,10 @@
-// Bump this release whenever a precached app file changes.
-const RELEASE = '2026-10-13-ui-1.2'
+// Generated release value; bump VERSION with scripts/release.mjs.
+const RELEASE = '1.0.0'
 const PREFIX = `cutout-shell:${new URL(self.registration.scope).pathname}:`
 const CACHE = `${PREFIX}${RELEASE}`
 const FILES = [
   './', './index.html', './style.css', './app.js', './diagnostics.js', './pwa.js',
-  './model.worker.js', './manifest.webmanifest', './icons/logo.svg',
+  './model.worker.js', './version.js', './manifest.webmanifest', './icons/logo.svg',
   './icons/icon-192.png', './icons/icon-512.png', './icons/icon-maskable-512.png',
   './icons/apple-touch-icon.png', './vendor/vue-3.5.43.esm-browser.prod.js',
   './vendor/tailwind-browser-4.3.3.js',
@@ -16,7 +16,7 @@ self.addEventListener('install', event => {
     const cache = await caches.open(CACHE)
     await cache.addAll(URLS.map(url => new Request(url, { cache: 'reload' })))
   })())
-  // Updates wait for an explicit user action or until all old app windows close.
+  // The page activates ready updates automatically when its image session is empty.
 })
 
 self.addEventListener('activate', event => {

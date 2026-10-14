@@ -13,7 +13,7 @@ This folder can stand alone now and can later sit inside a larger collection of 
 ## Install or reuse
 
 The stable app is an installable PWA with a home-screen icon, standalone window,
-offline interface, and an explicit update action. Open the live app in Safari on
+offline interface, and automatic updates when no photo is open. Open the live app in Safari on
 iPhone/iPad and choose **Share → Add to Home Screen**, or use your desktop browser's
 install action when available. Model loading and photo processing still require
 a connection in this release; installation does not bundle the inference runtime
@@ -52,6 +52,14 @@ Open `main/index.html` or `lab/index.html` with Live Server. The URL depends on 
 Live Server serves the files without a build step. These apps use CDN libraries and downloaded model weights, so no-build does not mean fully offline. Direct `file://` access is unsupported; use Live Server, another local HTTP server, or an HTTPS host.
 
 The model downloads are stored in the browser Cache Storage for the exact site origin. Both apps show the model cache and provide a clear button. If you serve both paths on the same host and port, they share that origin's model cache.
+
+## Versions and releases
+
+`VERSION` is the authoritative semantic version, beginning at **v1.0.0**. The app
+shows the running version below its name, in the footer, and in diagnostics.
+Versioned pushes to `main` run checks and publish a matching GitHub tag/release
+with changelog notes. See [CHANGELOG.md](CHANGELOG.md) and the
+[release workflow](docs/VERSIONING.md).
 
 ## Publishing notes
 

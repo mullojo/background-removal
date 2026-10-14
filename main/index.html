@@ -20,8 +20,8 @@
   <template id="app-template">
   <div class="app-shell">
     <header class="topbar">
-      <div class="brand"><span class="brand-mark"><span></span></span><span>cutout<span class="brand-dot">.</span></span></div>
-      <div class="topbar-right"><span class="privacy-dot"></span> Private, in your browser <span class="topbar-separator"></span> <span class="topbar-version">STUDIO / 01</span></div>
+      <div class="brand"><span class="brand-mark"><span></span></span><span class="brand-wordmark"><span>cutout<span class="brand-dot">.</span></span><small class="brand-version" aria-label="App version">v{{ APP_VERSION }}</small></span></div>
+      <div class="topbar-right"><span class="privacy-dot"></span> Private, in your browser</div>
     </header>
 
     <main class="main-layout">
@@ -92,14 +92,13 @@
             <p v-else-if="!pwaState.installed" class="section-description">On iPhone or iPad, open Safari’s Share menu and choose Add to Home Screen. On desktop, use your browser’s install menu when available.</p>
             <p class="section-description">{{ pwaState.offline ? 'You’re offline. The interface is available; connect to load the model.' : 'The interface can reopen offline after your first visit. Connect to load the model and process photos.' }}</p>
             <p class="section-description" role="status">{{ !pwaState.supported ? 'Offline installation is unavailable in this browser. Try Safari or Chrome.' : pwaState.offlineReady ? 'Offline interface ready.' : 'Preparing the offline interface…' }}</p>
-            <button v-if="pwaState.updateAvailable" class="button button-outline full" :disabled="busy || shareBusy" @click="updateApp">Update app <span aria-hidden="true">↻</span></button>
-            <p v-if="pwaState.updateAvailable" class="section-description">A new version is ready. Save your image before updating.</p>
+            <p v-if="pwaState.updateAvailable" class="section-description" role="status">An update is ready. It will apply automatically when no photo is open. Save your image, then start over when you’re ready.</p>
             <p v-if="pwaState.message" class="section-description" role="status">{{ pwaState.message }}</p>
           </section>
           <details class="diagnostics-section" :open="Boolean(interruptedNotice)"><summary>Help &amp; diagnostics</summary><p v-if="interruptedNotice" class="section-description">{{ interruptedNotice }}</p><p class="section-description">Copy processing steps, image dimensions, browser details, and errors. Photos and filenames are not included. The latest steps are saved in this browser to help after an unexpected reload.</p><label class="wasm-option"><input type="checkbox" v-model="preferWasm" :disabled="busy"> Use WASM for the next run</label><button class="button button-outline full" @click="copyDiagnostics">Copy diagnostics <span aria-hidden="true">↗</span></button><p v-if="diagnosticMessage" class="section-description" role="status">{{ diagnosticMessage }}</p><textarea v-if="diagnosticText" class="diagnostic-report" aria-label="Diagnostic report" :value="diagnosticText" readonly @focus="$event.target.select()"></textarea><small>App {{ APP_VERSION }}</small></details>
         </aside>
       </div>
-      <footer class="page-footer"><span>Made for simple, private image making.</span><span>POWERED BY TRANSFORMERS.JS + ORMBG</span></footer>
+      <footer class="page-footer"><span>Made for simple, private image making.</span><span>v{{ APP_VERSION }} · POWERED BY TRANSFORMERS.JS + ORMBG</span></footer>
     </main>
   </div>
   </template>

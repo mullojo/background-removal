@@ -279,6 +279,7 @@ createApp({
         mark('model-ready', { backend: data.backend }, activeRequest === requestId)
         refreshCache()
         runQueuedFile()
+        pwa?.tryUpdate?.()
       } else if (data.type === 'processing') {
         if (data.id !== requestId) return
         phase.value = 'processing'
@@ -318,6 +319,7 @@ createApp({
       statusDetail.value = 'Copy diagnostics to report this, or try again with WASM.'
       queuedFile = null
       pendingPhoto = null
+      pwa?.tryUpdate?.()
     }
 
     function cancelRun() {
@@ -333,6 +335,7 @@ createApp({
       error.value = 'Processing stopped.'
       statusDetail.value = 'Try again with WASM or choose a different image.'
       mark('cancelled', {}, false)
+      pwa?.tryUpdate?.()
     }
 
     function clearImage() {
@@ -354,6 +357,7 @@ createApp({
       phase.value = 'idle'
       statusDetail.value = 'Choose a new photo when you’re ready.'
       diagnostics.record('image-cleared', {}, { stage: 'idle', active: false, image: null })
+      pwa?.tryUpdate?.()
     }
 
     function retryWasm() {
@@ -593,6 +597,7 @@ createApp({
       refreshCache()
       pwa = createPwa({
         isBusy: () => busy.value || shareBusy.value,
+        hasImage: () => canRetry.value,
         onDiagnostic: (event, details) => diagnostics.record(event, details),
         onChange: state => {
           pwaState.value = state
@@ -622,6 +627,6 @@ createApp({
   refreshCache, clearCache, loadModel, acceptFile, onFileChange, onDrop, clearImage,
   selectBackground, shareImage, shareBusy, canShareFile, exportMessage, exportBusy,
   copyDiagnostics, diagnosticText, diagnosticMessage, interruptedNotice, cancelRun, retryWasm, previewError, preferWasm, canRetry, APP_VERSION,
-  pwaState, installApp: () => pwa?.install(), updateApp: () => pwa?.update() }
+  pwaState, installApp: () => pwa?.install() }
   },
 }).mount('#app')

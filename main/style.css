@@ -23,3 +23,4 @@ a.button-accent{text-decoration:none}
 @media(max-width:1100px){.canvas-footer{grid-template-areas:"actions actions" "filename reset";gap:8px 10px;padding-top:14px}.canvas-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.canvas-actions:has(> :only-child){grid-template-columns:1fr}}
 @media(max-width:620px){.canvas-button{font-size:11px;padding:11px 9px;gap:6px}.reset-button{min-height:44px;padding:9px 8px;background:transparent;border-color:transparent;font-size:11px}.file-label{font-size:11px}}
 @media(max-width:360px){.canvas-actions{grid-template-columns:1fr}}
+.brand-wordmark{display:flex;flex-direction:column;gap:2px;line-height:1}.brand-version{font-size:10px;font-weight:500;letter-spacing:.5px;color:#6b786f;line-height:1.2}

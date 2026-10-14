@@ -9,6 +9,7 @@ The stable no-build Cutout app, with these editable implementation files:
 - `app.js` — Vue 3 application state and image export
 - `model.worker.js` — Transformers.js model loading and inference
 - `diagnostics.js` — bounded local processing logs and recovery after an interrupted session
+- `version.js` — generated from the repository VERSION file
 - `pwa.js` — install, connectivity, and update controls
 - `service-worker.js` — versioned offline app shell
 - `manifest.webmanifest` and `icons/` — app identity and editable SVG logo
@@ -17,7 +18,9 @@ The stable no-build Cutout app, with these editable implementation files:
 No npm install, bundler, compilation, or build command is needed. Vue 3 and Tailwind CSS 4 are bundled locally. Transformers.js and the ORMBG model load remotely. Photos are processed locally in the browser.
 
 The app can be installed on a home screen or desktop and reopen its interface
-offline after the shell is cached. Connect to load the model and process photos.
+offline after the shell is cached. Updates apply automatically when no photo is
+open. The running version is visible under the Cutout name and in the footer.
+Connect to load the model and process photos.
 See [PWA behavior and testing](../docs/PWA.md) and [reuse instructions](../docs/REUSING.md).
 
 ## Run
@@ -72,3 +75,9 @@ Version `2026-10-13-mobile-4` gives every photo a fresh model worker, including
 photos selected through **Change image**, drag/drop, queued selection, or WASM retry.
 Diagnostics include `worker-created`, `worker:model-disposed`, and `worker-released`
 events to check that cleanup happened before export and the next run.
+
+## Releases
+
+Use the repository's [versioning workflow](../docs/VERSIONING.md): bump with
+`node scripts/release.mjs patch|minor|major`, complete CHANGELOG.md, check, commit,
+and push. `VERSION` drives the app, shell cache, and GitHub release tag.

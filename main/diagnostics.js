@@ -1,4 +1,5 @@
-export const APP_VERSION = '2026-10-13-ui-1'
+import { APP_VERSION } from './version.js'
+export { APP_VERSION }
 const STORAGE_KEY = 'cutout-diagnostics-v1'
 
 export function createDiagnostics() {

@@ -20,7 +20,9 @@ support either layout. Use HTTP for localhost testing, HTTPS for public installs
 | `main/style.css` | Colors, typography, spacing, responsive layout, header mark |
 | `main/app.js` | Backdrop choices, image handling, export behavior |
 | `main/model.worker.js` | Model ID, backend choices, inference and mask extraction |
-| `main/diagnostics.js` | App version and report identity |
+| `VERSION` and `scripts/release.mjs` | Authoritative version and release preparation |
+| `main/version.js` | Generated app version; do not edit separately |
+| `main/diagnostics.js` | Diagnostic report identity |
 | `main/manifest.webmanifest` | Install name, identity, description, icons, theme |
 | `main/icons/logo.svg` | Editable source for the existing terracotta frame logo |
 | `main/pwa.js` | Install and update behavior |
@@ -39,20 +41,22 @@ handling; changing the model ID alone is not sufficient for every model.
 
 ## Release an update
 
-1. Edit the source and update `APP_VERSION` in `main/diagnostics.js`.
-2. Bump `RELEASE` in `main/service-worker.js` for every change to cached app files.
-   Keep `FILES` current when adding, removing, or renaming app assets.
-3. Run `node --test tests/*.test.cjs` with a modern Node.js runtime. These tests
-   use Node's standard library and do not require npm install.
-4. Serve the app, verify upload/export and mobile layout, then check the waiting
-   update flow. Service workers can keep an older version visible during development;
-   use the app's update action or browser developer tools to reset your local shell.
+1. Edit the source, then run `node scripts/release.mjs patch` (or minor/major).
+2. Complete the generated changelog section. Keep the service worker's `FILES`
+   list current when adding, removing, or renaming app assets.
+3. Run `node scripts/release.mjs --check` and `node --test tests/*.test.cjs` with a
+   modern Node.js runtime. No npm install is needed.
+4. Serve the app, verify upload/export and mobile layout, then check automatic
+   updates when empty and while holding a photo. Clear the test photo to allow
+   a waiting update to reload. Browser developer tools can reset a local shell.
+
 5. Capture new screenshots if the interface changed. The owner's README image
    lives at `docs/images/cutout-studio.png`; `cutout-desktop.jpg` and
    `cutout-mobile.jpg` record the PWA layout. These are actual browser screenshots
    without a personal photo loaded.
 6. Commit and push. Wait for Pages, then check the reported app version and retest
-   on the target phone. See [PWA.md](PWA.md) and [MOBILE_TESTING.md](MOBILE_TESTING.md).
+   on the target phone. A versioned push also publishes its GitHub release. See
+   [VERSIONING.md](VERSIONING.md), [PWA.md](PWA.md) and [MOBILE_TESTING.md](MOBILE_TESTING.md).
 
 Vue/Tailwind are pinned local copies with upstream MIT notices. See
 [`main/vendor/README.md`](../main/vendor/README.md) before updating them.

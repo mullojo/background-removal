@@ -40,11 +40,13 @@ evicted, and an installed app's storage may differ from the original browser tab
 
 ## Updates and storage
 
-Updates precache a complete new shell and wait. **Update app** appears when a new
-worker is waiting and is disabled during image processing, export, or sharing.
-Save the current image first: updating reloads the selected app window. Other
-open windows are not forcibly reloaded. Closing all old windows also lets a waiting
-worker activate under the browser's normal lifecycle.
+Updates precache a complete new shell, then apply automatically when no photo
+is open and processing/sharing has finished. If a photo is present, the app waits
+until **Start over** or a later launch so an update cannot discard your result.
+Other open windows also defer reloading while they hold a photo. Checks run on
+launch, reconnection, return to the app, and every five minutes while visible
+and online. There is no update button in the new UI. See [VERSIONING.md](VERSIONING.md)
+for the first-upgrade transition and GitHub release workflow.
 
 Activation deletes only older Cutout shell caches for that scope. It leaves model
 and unrelated app caches alone. **Clear model cache** clears model downloads;
@@ -58,8 +60,8 @@ it does not remove the installed shell. See
 - After **Offline interface ready**, go offline and relaunch. The interface should
   appear with a connection message; it should not claim that the model is loaded.
 - Reconnect with a selected photo waiting. It should load the model before decoding.
-- After a later release, save any current PNG, choose **Update app**, and check the
-  version under diagnostics. Copy diagnostics includes connectivity, standalone,
+- After a later release, save any current PNG and choose **Start over**; a waiting
+  update should apply automatically. Check the header version. Copy diagnostics includes connectivity, standalone,
   and PWA readiness information.
 
 For local testing use `localhost`/`127.0.0.1`. A phone's HTTP LAN URL does not provide
@@ -67,10 +69,14 @@ the secure context needed for service workers; use the HTTPS deployment instead.
 
 ## Verification in this release
 
-The in-app browser verified the rendered interface, real model loading, service
-worker update offering, explicit update/reload, and offline-interface readiness.
-The shell was also checked with its local origin server stopped. Automated tests
-cover root/subdirectory routing, cache isolation, explicit update activation,
-busy-state protection, connectivity/install events, and manifest/icon sizes.
-Existing simulated-worker/native-Canvas image checks cover export and recovery.
-Native installation and physical iPhone behavior still require device testing.
+Earlier PWA checks verified rendering, model loading, installation readiness, and
+the shell reopening with its local origin server stopped. For v1.0.0, an isolated
+browser fixture automatically advanced from a test v1.0.0 to v1.0.1 without a
+button. A later test v1.0.2 left an open result and its download link intact, then
+loaded automatically after Start over. These fixture versions did not change the
+repository's actual v1.0.0 release.
+
+Automated tests cover root/subdirectory routing, cache isolation, safe automatic
+activation/reload, connectivity/install events, and manifest/icon sizes. Existing
+image lifecycle/export checks continue to pass. Physical iPhone automatic-update
+behavior and the first GitHub publishing run still need confirmation after push.

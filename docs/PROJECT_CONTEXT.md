@@ -97,3 +97,10 @@ Version `2026-10-13-ui-1` improves the image toolbar: tap-to-toggle Compare orig
 a prominent Change image button, a quieter Start over action, and a small filename
 caption without the checkbox-like glyph. Start over releases image resources and
 forgets the source while preserving downloaded models and the PWA shell.
+
+The next formal release is **1.0.0**, replacing date-based identifiers with VERSION
+as the source of truth. A release script synchronizes generated app/cache values;
+GitHub Actions checks changes and publishes matching tags/releases on versioned
+pushes to main. The version is shown in the header/footer. Automatic PWA updates
+wait for an empty image session; Start over permits the pending reload. The first
+upgrade from ui-1 can still require its old update action once.

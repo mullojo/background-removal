@@ -1,7 +1,12 @@
-export function createPwa({ onChange, onDiagnostic, isBusy }) {
+export function createPwa({ onChange, onDiagnostic, isBusy, hasImage = () => false }) {
   let prompt = null
   let registration = null
-  let reloadRequested = false
+  let activationRequested = false
+  let reloadPending = false
+  let reloaded = false
+  let hadController = Boolean(navigator.serviceWorker?.controller)
+  let lastCheck = 0
+  let checking = false
   let disposed = false
   let installing = null
   const display = window.matchMedia('(display-mode: standalone)')
@@ -15,7 +20,7 @@ export function createPwa({ onChange, onDiagnostic, isBusy }) {
     message: '',
   }
   const publish = () => { if (!disposed) onChange({ ...state }) }
-  function connectivity() { state.offline = !navigator.onLine; publish() }
+  function connectivity() { state.offline = !navigator.onLine; publish(); if (!state.offline) checkForUpdates() }
   function displayChanged() { state.installed = display.matches || navigator.standalone === true; publish() }
   function beforeInstall(event) {
     event.preventDefault()
@@ -32,12 +37,17 @@ export function createPwa({ onChange, onDiagnostic, isBusy }) {
   }
   function controllerChanged() {
     state.offlineReady = Boolean(navigator.serviceWorker.controller)
+    // First installation claims the page without needing a reload.
+    if (hadController || activationRequested) reloadPending = true
+    hadController = true
+    state.updateAvailable = reloadPending
     publish()
-    if (reloadRequested) window.location.reload()
+    tryUpdate()
   }
   function waiting() {
-    state.updateAvailable = Boolean(registration?.waiting && navigator.serviceWorker.controller)
+    state.updateAvailable = reloadPending || Boolean(registration?.waiting && navigator.serviceWorker.controller)
     publish()
+    tryUpdate()
   }
   function workerChanged() {
     if (installing?.state === 'installed') waiting()
@@ -67,15 +77,38 @@ export function createPwa({ onChange, onDiagnostic, isBusy }) {
     }
     publish()
   }
-  function update() {
-    if (isBusy() || !registration?.waiting) return
-    reloadRequested = true
-    registration.waiting.postMessage({ type: 'ACTIVATE_UPDATE' })
+  function tryUpdate() {
+    if (disposed || reloaded || isBusy() || hasImage()) return
+    if (reloadPending) {
+      reloaded = true
+      onDiagnostic('pwa-auto-reload')
+      window.location.reload()
+    } else if (!activationRequested && registration?.waiting && navigator.serviceWorker.controller) {
+      activationRequested = true
+      onDiagnostic('pwa-auto-activate')
+      registration.waiting.postMessage({ type: 'ACTIVATE_UPDATE' })
+    }
+  }
+  async function checkForUpdates() {
+    if (disposed || !registration || checking || !navigator.onLine || document.visibilityState === 'hidden' || Date.now() - lastCheck < 60000) return
+    checking = true
+    lastCheck = Date.now()
+    try { await registration.update() }
+    catch (error) { onDiagnostic('pwa-update-check-error', { message: String(error.message || error) }) }
+    finally { checking = false }
+    if (!disposed) { waiting(); tryUpdate() }
+  }
+  function returnedToApp() {
+    if (document.visibilityState === 'hidden') return
+    tryUpdate()
+    checkForUpdates()
   }
   window.addEventListener('beforeinstallprompt', beforeInstall)
   window.addEventListener('appinstalled', installed)
   window.addEventListener('online', connectivity)
   window.addEventListener('offline', connectivity)
+  window.addEventListener('focus', returnedToApp)
+  document.addEventListener('visibilitychange', returnedToApp)
   display.addEventListener('change', displayChanged)
   publish()
   if (state.supported) {
@@ -87,6 +120,7 @@ export function createPwa({ onChange, onDiagnostic, isBusy }) {
         waiting()
         registration.addEventListener('updatefound', updateFound)
         updateFound()
+        checkForUpdates()
         onDiagnostic('pwa-registered', { scope: registration.scope })
         navigator.serviceWorker.ready.then(() => {
           state.offlineReady = true
@@ -98,12 +132,17 @@ export function createPwa({ onChange, onDiagnostic, isBusy }) {
         publish()
       })
   }
-  return { install, update, dispose() {
+  const checkTimer = setInterval(returnedToApp, 5 * 60 * 1000)
+  checkTimer?.unref?.()
+  return { install, tryUpdate, dispose() {
     disposed = true
+    clearInterval(checkTimer)
     window.removeEventListener('beforeinstallprompt', beforeInstall)
     window.removeEventListener('appinstalled', installed)
     window.removeEventListener('online', connectivity)
     window.removeEventListener('offline', connectivity)
+    window.removeEventListener('focus', returnedToApp)
+    document.removeEventListener('visibilitychange', returnedToApp)
     display.removeEventListener('change', displayChanged)
     navigator.serviceWorker?.removeEventListener('controllerchange', controllerChanged)
     registration?.removeEventListener('updatefound', updateFound)
