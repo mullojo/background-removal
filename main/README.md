@@ -38,7 +38,10 @@ Model: [onnx-community/ormbg-ONNX](https://huggingface.co/onnx-community/ormbg-O
 The model loads automatically when the page opens. A photo selected while loading
 waits until the model is ready before it is decoded. Only the latest waiting photo
 is retained. Changing photos releases the previous previews and image resources
-before decoding the next one; the loaded model is retained for reuse. Clearing the
+before loading a fresh model session for the next one. The pipeline is disposed
+after each inference and its worker is terminated before full-resolution export.
+Downloaded weights stay cached, but each photo pays model initialization time.
+Clearing the
 model cache leaves it empty until the next upload or **Load model** action.
 
 For the model architecture and the browser processing flow, see the [main project README](../README.md#ormbg-model-architecture).
@@ -51,4 +54,9 @@ Open **Help & diagnostics → Copy diagnostics** to copy browser details, image 
 
 Use **Stop processing** if a run stalls. After a handled error, **Retry with WASM** reloads the model on the CPU backend. After a full-page crash, reopen the page and enable **Use WASM for the next run** under diagnostics before choosing the image again. This option lasts for the current page session.
 
-To reduce memory use, the app sends a 1024 × 1024 pixel buffer to the worker and limits display previews to a 1280-pixel longest edge. It closes the full-resolution decoded photo before model loading and inference, then decodes the retained original file again to apply the returned mask for export. The downloaded/shared PNG retains the original photo dimensions. Very large photos and device/runtime limits can still cause failures. See [mobile testing notes](../docs/MOBILE_TESTING.md).
+To reduce memory use, the app sends a 1024 × 1024 pixel buffer to the worker and limits display previews to a 1280-pixel longest edge. It closes the full-resolution decoded photo before inference, then decodes the retained original file again to apply the returned mask for export. The downloaded/shared PNG retains the original photo dimensions. Very large photos and device/runtime limits can still cause failures. See [mobile testing notes](../docs/MOBILE_TESTING.md).
+
+Version `2026-10-13-mobile-4` gives every photo a fresh model worker, including
+photos selected through **Change image**, drag/drop, queued selection, or WASM retry.
+Diagnostics include `worker-created`, `worker:model-disposed`, and `worker-released`
+events to check that cleanup happened before export and the next run.

@@ -53,13 +53,13 @@
         </section>
 
         <aside class="controls-panel">
-          <div class="control-section model-section"><div class="section-top"><span class="section-index">02 / PROCESS</span><span class="status-pill" :class="{ active: backend && phase !== 'error', danger: phase === 'error' }"><span></span>{{ phase === 'error' ? 'ERROR' : busy ? 'WORKING' : backend ? 'MODEL LOADED' : 'NOT LOADED' }}</span></div><h2>Remove the background</h2><p class="section-description">Powered by ORMBG. {{ backend ? `Running on ${backend}.` : 'WebGPU first, WASM when needed.' }} Your photo stays on your device.</p>
+          <div class="control-section model-section"><div class="section-top"><span class="section-index">02 / PROCESS</span><span class="status-pill" :class="{ active: backend && phase !== 'error', danger: phase === 'error' }"><span></span>{{ phase === 'error' ? 'ERROR' : busy ? 'WORKING' : modelLoaded ? 'MODEL LOADED' : phase === 'complete' ? 'IMAGE READY' : 'NOT LOADED' }}</span></div><h2>Remove the background</h2><p class="section-description">Powered by ORMBG. {{ backend ? `${modelLoaded ? 'Running' : 'Processed'} on ${backend}.` : 'WebGPU first, WASM when needed.' }} Your photo stays on your device.</p>
             <div class="status-card" role="status" aria-live="polite"><div class="status-icon" :class="{ spinning: busy }">✳</div><div class="status-copy"><strong>{{ stageText }}</strong><span>{{ statusDetail }}</span></div></div>
             <div v-if="phase === 'loading' && downloadProgress !== null" class="progress-wrap"><div class="progress-track"><span :style="{ width: `${downloadProgress}%` }"></span></div><small>{{ downloadFile }} · {{ downloadProgress }}%</small></div>
             <p v-if="error" class="error-text">{{ error }}</p>
             <button v-if="busy && !exportBusy && phase !== 'compositing'" class="text-action" @click="cancelRun">Stop processing</button>
             <button v-if="phase === 'error' && canRetry && !busy" class="button button-outline full" @click="retryWasm">Retry with WASM <span aria-hidden="true">↗</span></button>
-            <button v-if="!backend && !busy" class="button button-outline full" @click="loadModel()">Load model <span aria-hidden="true">↗</span></button>
+            <button v-if="!modelLoaded && !busy && !resultUrl" class="button button-outline full" @click="loadModel()">Load model <span aria-hidden="true">↗</span></button>
           </div>
 
           <div class="control-section backdrop-section"><span class="section-index">03 / FINISH</span><div class="section-title-row"><div><h2>Choose a backdrop</h2><p class="section-description">Preview a look, then export it as a PNG.</p></div></div>

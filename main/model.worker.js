@@ -15,6 +15,19 @@ function progress(event) {
   }
 }
 
+async function disposeModel(id) {
+  const previous = segmenter
+  segmenter = null
+  if (!previous) return
+  try {
+    await previous.dispose?.()
+    self.postMessage({ type: 'diagnostic', id, stage: 'model-disposed', details: { backend } })
+  } catch (error) {
+    // The page also terminates this worker; report cleanup trouble without losing a valid mask.
+    self.postMessage({ type: 'diagnostic', id, stage: 'model-dispose-error', details: { backend, message: String(error?.message || error) } })
+  }
+}
+
 async function loadModel(forceWasm = false) {
   if (segmenter && (!forceWasm || backend === 'WASM · Q8')) return backend
   if (loading) return loading
@@ -93,9 +106,11 @@ self.onmessage = async ({ data }) => {
         meanAlpha: Math.round(sum / pixels.length * 100) / 100,
         foregroundPercent: Math.round(foreground / pixels.length * 10000) / 100,
       } })
+      await disposeModel(data.id)
       self.postMessage({ type: 'result', id: data.id, width: image.width, height: image.height, channels: 1, pixels }, [pixels.buffer])
     }
   } catch (error) {
+    await disposeModel(data.id)
     self.postMessage({ type: 'error', id: data.id, message: String(error?.message || error), stack: String(error?.stack || '').slice(0, 2500) })
   }
 }

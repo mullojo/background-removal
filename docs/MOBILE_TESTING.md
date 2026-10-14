@@ -64,6 +64,45 @@ order, resource release, cancellation, failed preload recovery, WASM selection,
 soft transparency, sharing, and full-resolution export of a 24.5 MP source. They
 do not validate actual model execution or physical iPhone stability.
 
+## Mobile-4: reset between photos
+
+The user's physical iPhone testing of the first PWA release reported successful
+first images after reload, then a failed second image through **Change image** and
+a tab crash on another retry. The same pattern occurred in a normal tab and the
+installed PWA; desktop did not reproduce it. This narrows the investigation to
+resources retained between runs, but does not identify the exact native cause.
+
+`2026-10-13-mobile-4` uses one inference per worker. After extracting the mask, the
+worker awaits the pipeline's `dispose()` and reports `worker:model-disposed`.
+The page then terminates the worker and detaches its event handlers before
+reopening the original photo for full-resolution export. On the next upload,
+it releases old preview/export URLs, PNG references, canvases, and bitmaps,
+lets Vue detach the previews, and yields before loading a fresh worker. It waits
+for that model to be ready before decoding. Failed/cancelled runs also terminate
+their worker. Downloaded weights and PWA shell caches are preserved.
+
+This follows the [Transformers.js pipeline disposal API](https://huggingface.co/docs/transformers.js/api/pipelines).
+It resets our image and inference resources without reloading the entire page;
+browser-native memory reclamation timing remains controlled by the browser.
+Every new photo incurs model initialization, typically reading already-cached weights.
+
+After deployment, verify `mobile-4` under diagnostics, then process at least three
+photos through **Change image** without reloading, first in Safari and then in the
+installed PWA. Include the formerly failing second photo. Expect one new
+`worker-created` generation per photo, `worker:model-disposed` and
+`worker-released` before `export-image-decoding`, and `previous-image-released`
+before the next model load. Copy diagnostics immediately after a failed result
+before attempting another image.
+
+Automated lifecycle tests verify per-photo workers, disposal before result/error,
+old URL/canvas release before replacement model loading, stale-message isolation,
+and WebGPU-to-WASM fallback. Native-Canvas checks cover five successive photos,
+full-size exports, transparency, cancellation, and retry. These tests cannot
+reproduce or prove a fix for the iPhone's native process crash.
+The local in-app browser also completed three real WebGPU runs using the project's
+icon PNGs through Change image, including a backdrop change between runs, without
+reloading. This checks runtime compatibility rather than cutout quality or iPhone stability.
+
 ## Remote inspection from a Mac
 
 On iPhone, enable **Settings → Apps → Safari → Advanced → Web Inspector**. On Mac, enable **Safari → Settings → Advanced → Show features for web developers**. Connect and trust the phone, open the app on the phone, then select **Develop → your iPhone → the app URL** in Mac Safari. Open Console before reproducing the issue.

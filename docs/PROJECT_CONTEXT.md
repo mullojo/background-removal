@@ -85,3 +85,10 @@ The next release, `2026-10-13-pwa-1`, adds an installable stable app, SVG/PNG in
 icons, an offline shell with bundled Vue/Tailwind runtimes, explicit update controls,
 connectivity/standalone diagnostics, README screenshots, and reuse/PWA guides.
 The inference runtime and model weights remain outside the offline shell.
+
+Physical iPhone testing then found first-image success but failure on the second
+image through Change image, followed by a tab crash on another retry, in both
+Safari and installed PWA. `2026-10-13-mobile-4` replaces model-session reuse with
+one inference per worker: dispose the pipeline, terminate the worker before export,
+release the previous image before loading a fresh session, and preserve downloaded
+weights. Lifecycle diagnostics and tests cover this path; device confirmation is pending.

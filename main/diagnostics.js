@@ -1,4 +1,4 @@
-export const APP_VERSION = '2026-10-13-pwa-1'
+export const APP_VERSION = '2026-10-13-mobile-4'
 const STORAGE_KEY = 'cutout-diagnostics-v1'
 
 export function createDiagnostics() {

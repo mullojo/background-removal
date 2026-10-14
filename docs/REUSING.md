@@ -42,7 +42,7 @@ handling; changing the model ID alone is not sufficient for every model.
 1. Edit the source and update `APP_VERSION` in `main/diagnostics.js`.
 2. Bump `RELEASE` in `main/service-worker.js` for every change to cached app files.
    Keep `FILES` current when adding, removing, or renaming app assets.
-3. Run `node --test tests/pwa.test.cjs` with a modern Node.js runtime. These tests
+3. Run `node --test tests/*.test.cjs` with a modern Node.js runtime. These tests
    use Node's standard library and do not require npm install.
 4. Serve the app, verify upload/export and mobile layout, then check the waiting
    update flow. Service workers can keep an older version visible during development;

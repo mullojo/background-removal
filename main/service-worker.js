@@ -1,5 +1,5 @@
 // Bump this release whenever a precached app file changes.
-const RELEASE = '2026-10-13-pwa-1.2'
+const RELEASE = '2026-10-13-mobile-4'
 const PREFIX = `cutout-shell:${new URL(self.registration.scope).pathname}:`
 const CACHE = `${PREFIX}${RELEASE}`
 const FILES = [

@@ -27,6 +27,7 @@ createApp({
     const selected = ref('transparent')
     const phase = ref('idle')
     const backend = ref('')
+    const modelLoaded = ref(false)
     const downloadFile = ref('')
     const downloadProgress = ref(null)
     const statusDetail = ref('Upload a photo to begin.')
@@ -56,6 +57,8 @@ createApp({
     let requestId = 0
     let activeRequest = null
     let queuedFile = null
+    let pendingPhoto = null
+    let workerGeneration = 0
     let sourceFile = null
     let cutoutBlob = null
     let exportFile = null
@@ -77,22 +80,53 @@ createApp({
 
     function makeWorker() {
       worker = new Worker(new URL('./model.worker.js', import.meta.url), { type: 'module' })
+      workerGeneration += 1
+      diagnostics.record('worker-created', { generation: workerGeneration })
       const currentWorker = worker
       worker.onmessage = event => { if (worker === currentWorker) onWorkerMessage(event) }
       worker.onerror = event => {
         if (worker !== currentWorker) return
         fail(new Error(event.message || 'The model worker stopped unexpectedly.'))
-        worker.terminate()
-        worker = null
-        backend.value = ''
       }
       worker.onmessageerror = () => {
         if (worker !== currentWorker) return
         fail(new Error('The model worker returned an unreadable message.'))
-        worker.terminate()
-        worker = null
-        backend.value = ''
       }
+    }
+
+    function stopWorker(reason, keepBackend = false) {
+      const previous = worker
+      worker = null
+      modelLoaded.value = false
+      if (!keepBackend) backend.value = ''
+      if (previous) {
+        previous.onmessage = null
+        previous.onerror = null
+        previous.onmessageerror = null
+        previous.terminate()
+        diagnostics.record('worker-released', { generation: workerGeneration, reason })
+      }
+    }
+
+    function releaseImage() {
+      revoke(originalUrl.value)
+      revoke(resultUrl.value)
+      revoke(exportUrl.value)
+      originalUrl.value = ''
+      resultUrl.value = ''
+      exportUrl.value = ''
+      exportFile = null
+      exportPending = false
+      canShareFile.value = false
+      exportMessage.value = ''
+      releaseCanvas(cutoutCanvas)
+      cutoutCanvas = null
+      cutoutBlob = null
+      imageBitmap?.close()
+      imageBitmap = null
+      showOriginal.value = false
+      fileName.value = ''
+      dimensions.value = ''
     }
 
     function revoke(url) { if (url) nextTick(() => URL.revokeObjectURL(url)) }
@@ -173,8 +207,7 @@ createApp({
     async function clearCache() {
       if (busy.value) return
       try {
-        worker?.terminate()
-        worker = null
+        stopWorker('cache-cleared')
         await caches.delete(CACHE_KEY)
         backend.value = ''
         phase.value = resultUrl.value ? 'complete' : 'idle'
@@ -187,7 +220,7 @@ createApp({
     }
 
     function loadModel(forceWasm = preferWasm.value) {
-      if (busy.value || (backend.value && (!forceWasm || backend.value === 'WASM · Q8'))) return
+      if (busy.value || (worker && modelLoaded.value && (!forceWasm || backend.value === 'WASM · Q8'))) return
       if (navigator.onLine === false) {
         phase.value = 'offline'
         statusDetail.value = 'Connect to the internet to load the model. Your photo will wait on this device.'
@@ -202,10 +235,17 @@ createApp({
     }
 
     function runQueuedFile() {
-      if (!queuedFile || busy.value) return
-      const next = queuedFile
-      queuedFile = null
-      acceptFile(next.file, next.forceWasm)
+      if (busy.value || shareBusy.value) return
+      if (queuedFile) {
+        const next = queuedFile
+        queuedFile = null
+        pendingPhoto = null
+        acceptFile(next.file, next.forceWasm)
+      } else if (pendingPhoto) {
+        const next = pendingPhoto
+        pendingPhoto = null
+        preparePhoto(next.file, next.forceWasm, next.id)
+      }
     }
 
     function onWorkerMessage({ data }) {
@@ -232,6 +272,7 @@ createApp({
         }
       } else if (data.type === 'ready') {
         backend.value = data.backend
+        modelLoaded.value = true
         phase.value = activeRequest === requestId ? 'processing' : 'ready'
         statusDetail.value = `ORMBG loaded on ${backend.value}. Ready to process.`
         downloadProgress.value = null
@@ -252,9 +293,11 @@ createApp({
         if (data.id !== requestId) return
         phase.value = 'compositing'
         clearTimeout(slowTimer)
+        // The worker has disposed its pipeline. Drop its entire runtime before export.
+        stopWorker('inference-complete', true)
         mark('compositing', { maskWidth: data.width, maskHeight: data.height })
         statusDetail.value = 'Applying the mask to your full-resolution photo…'
-        compose(data).catch(cause => fail(cause))
+        compose(data).catch(cause => { if (data.id === requestId) fail(cause) })
       } else if (data.type === 'error') {
         if (data.id && data.id !== requestId) return
         fail(Object.assign(new Error(data.message), { stack: data.stack || data.message }))
@@ -265,6 +308,7 @@ createApp({
       clearTimeout(slowTimer)
       activeRequest = null
       mark('error', errorDetails(cause), false)
+      stopWorker('error')
       console.error('[Cutout]', cause)
       imageBitmap?.close()
       imageBitmap = null
@@ -273,6 +317,7 @@ createApp({
       error.value = cause?.message || String(cause)
       statusDetail.value = 'Copy diagnostics to report this, or try again with WASM.'
       queuedFile = null
+      pendingPhoto = null
     }
 
     function cancelRun() {
@@ -280,9 +325,8 @@ createApp({
       activeRequest = null
       clearTimeout(slowTimer)
       queuedFile = null
-      worker?.terminate()
-      worker = null
-      backend.value = ''
+      pendingPhoto = null
+      stopWorker('cancelled')
       imageBitmap?.close()
       imageBitmap = null
       phase.value = 'error'
@@ -293,9 +337,7 @@ createApp({
 
     function retryWasm() {
       if (!sourceFile || busy.value) return
-      worker?.terminate()
-      worker = null
-      backend.value = ''
+      stopWorker('wasm-retry')
       preferWasm.value = true
       acceptFile(sourceFile, true)
     }
@@ -306,7 +348,7 @@ createApp({
         if (!busy.value) fail(new Error('Choose a JPG, PNG, WebP, or other browser-supported image.'))
         return
       }
-      if (busy.value) {
+      if (busy.value || shareBusy.value) {
         queuedFile = { file, forceWasm }
         if (activeRequest === null && phase.value === 'loading') {
           sourceFile = file
@@ -317,38 +359,38 @@ createApp({
       }
       sourceFile = file
       canRetry.value = true
-      if (!backend.value || (forceWasm && backend.value !== 'WASM · Q8')) {
-        queuedFile = { file, forceWasm }
-        diagnostics.record('image-waiting-for-model', { forceWasm })
-        loadModel(forceWasm)
-        return
-      }
       const id = ++requestId
-      activeRequest = id
-      sourceFile = file
+      activeRequest = null
       phase.value = 'preparing'
-      statusDetail.value = 'Preparing a smaller model input; your export keeps the original dimensions…'
+      statusDetail.value = 'Releasing the previous photo and preparing a fresh session…'
       error.value = ''
-      revoke(originalUrl.value)
-      revoke(resultUrl.value)
-      revoke(exportUrl.value)
-      resultUrl.value = ''
-      exportUrl.value = ''
-      originalUrl.value = ''
-      exportFile = null
-      canShareFile.value = false
-      exportMessage.value = ''
-      releaseCanvas(cutoutCanvas)
-      cutoutCanvas = null
-      cutoutBlob = null
-      imageBitmap?.close()
-      imageBitmap = null
-      exportPending = false
+      releaseImage()
+      if (worker && forceWasm && backend.value !== 'WASM · Q8') stopWorker('backend-change')
       try {
-        // Let Vue detach the previous previews before decoding the next photo.
+        // Detach previews and yield before loading another model or decoding a photo.
         await nextTick()
+        await new Promise(resolve => setTimeout(resolve, 0))
         if (id !== requestId) return
         mark('previous-image-released')
+        if (!worker || !modelLoaded.value) {
+          pendingPhoto = { file, forceWasm, id }
+          diagnostics.record('image-waiting-for-model', { forceWasm })
+          phase.value = 'idle'
+          loadModel(forceWasm)
+          return
+        }
+        await preparePhoto(file, forceWasm, id)
+      } catch (cause) {
+        if (id === requestId) fail(cause)
+      }
+    }
+
+    async function preparePhoto(file, forceWasm, id) {
+      if (id !== requestId) return
+      activeRequest = id
+      phase.value = 'preparing'
+      statusDetail.value = 'Preparing a smaller model input; your export keeps the original dimensions…'
+      try {
         mark('image-decoding', { type: file.type, bytes: file.size }, true)
         diagnostics.record('image-metadata', {}, { image: { type: file.type, bytes: file.size } })
         const decoded = await createImageBitmap(file, { imageOrientation: 'from-image' })
@@ -522,7 +564,7 @@ createApp({
           exportMessage.value = 'Sharing could not open. Use Download image instead.'
           diagnostics.record('share-error', errorDetails(cause))
         }
-      } finally { shareBusy.value = false }
+      } finally { shareBusy.value = false; runQueuedFile() }
     }
 
     onMounted(() => {
@@ -533,7 +575,7 @@ createApp({
         onDiagnostic: (event, details) => diagnostics.record(event, details),
         onChange: state => {
           pwaState.value = state
-          if (!state.offline && phase.value === 'offline') loadModel(queuedFile?.forceWasm ?? preferWasm.value)
+          if (!state.offline && phase.value === 'offline') loadModel(queuedFile?.forceWasm ?? pendingPhoto?.forceWasm ?? preferWasm.value)
         },
       })
       window.addEventListener('error', globalError)
@@ -545,7 +587,7 @@ createApp({
     onUnmounted(() => {
       pwa?.dispose()
       clearTimeout(slowTimer)
-      worker?.terminate(); imageBitmap?.close(); releaseCanvas(cutoutCanvas)
+      stopWorker('page-unmounted'); imageBitmap?.close(); releaseCanvas(cutoutCanvas)
       revoke(originalUrl.value); revoke(resultUrl.value); revoke(exportUrl.value)
       window.removeEventListener('error', globalError)
       window.removeEventListener('unhandledrejection', rejectedPromise)
@@ -553,7 +595,7 @@ createApp({
       document.removeEventListener('visibilitychange', pageHidden)
     })
     return { CACHE_KEY, choices, fileInput, fileName, dimensions, originalUrl, resultUrl, exportUrl,
-  selected, phase, backend, downloadFile, downloadProgress, statusDetail, error,
+  selected, phase, backend, modelLoaded, downloadFile, downloadProgress, statusDetail, error,
   dragOver, showOriginal, cacheFiles, cacheBytes, cacheAvailable, origin,
   busy, currentChoice, stageText, cacheSize, previewStyle,
   refreshCache, clearCache, loadModel, acceptFile, onFileChange, onDrop,
