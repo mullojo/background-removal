@@ -43,6 +43,7 @@ createApp({
     const diagnosticText = ref('')
     const diagnosticMessage = ref('')
     const preferWasm = ref(false)
+    const canRetry = ref(false)
     const diagnostics = createDiagnostics()
     const interruptedNotice = diagnostics.previous ? `An earlier session ended during “${diagnostics.previous.stage}”. Its last steps are included in Copy diagnostics.` : ''
     const origin = window.location.origin
@@ -178,13 +179,20 @@ createApp({
       }
     }
 
-    function loadModel() {
-      if (busy.value || backend.value) return
+    function loadModel(forceWasm = preferWasm.value) {
+      if (busy.value || (backend.value && (!forceWasm || backend.value === 'WASM · Q8'))) return
       error.value = ''
       phase.value = 'loading'
       statusDetail.value = 'Connecting to Hugging Face for the model files…'
-      mark('model-load-requested')
-      worker.postMessage({ type: 'load', forceWasm: preferWasm.value })
+      mark('model-load-requested', { forceWasm })
+      worker.postMessage({ type: 'load', forceWasm })
+    }
+
+    function runQueuedFile() {
+      if (!queuedFile || busy.value) return
+      const next = queuedFile
+      queuedFile = null
+      acceptFile(next.file, next.forceWasm)
     }
 
     function onWorkerMessage({ data }) {
@@ -216,6 +224,7 @@ createApp({
         downloadProgress.value = null
         mark('model-ready', { backend: data.backend }, activeRequest === requestId)
         refreshCache()
+        runQueuedFile()
       } else if (data.type === 'processing') {
         if (data.id !== requestId) return
         phase.value = 'processing'
@@ -280,15 +289,32 @@ createApp({
 
     async function acceptFile(file, forceWasm = preferWasm.value) {
       if (!file) return
-      if (busy.value) { queuedFile = file; return }
-      if (!file.type.startsWith('image/')) { fail(new Error('Choose a JPG, PNG, WebP, or other browser-supported image.')); return }
+      if (!file.type.startsWith('image/')) {
+        if (!busy.value) fail(new Error('Choose a JPG, PNG, WebP, or other browser-supported image.'))
+        return
+      }
+      if (busy.value) {
+        queuedFile = { file, forceWasm }
+        if (activeRequest === null && phase.value === 'loading') {
+          sourceFile = file
+          canRetry.value = true
+        }
+        diagnostics.record('image-queued', { forceWasm })
+        return
+      }
+      sourceFile = file
+      canRetry.value = true
+      if (!backend.value || (forceWasm && backend.value !== 'WASM · Q8')) {
+        queuedFile = { file, forceWasm }
+        diagnostics.record('image-waiting-for-model', { forceWasm })
+        loadModel(forceWasm)
+        return
+      }
       const id = ++requestId
       activeRequest = id
       sourceFile = file
       phase.value = 'preparing'
       statusDetail.value = 'Preparing a smaller model input; your export keeps the original dimensions…'
-      mark('image-decoding', { type: file.type, bytes: file.size }, true)
-      diagnostics.record('image-metadata', {}, { image: { type: file.type, bytes: file.size } })
       error.value = ''
       revoke(originalUrl.value)
       revoke(resultUrl.value)
@@ -304,7 +330,14 @@ createApp({
       cutoutBlob = null
       imageBitmap?.close()
       imageBitmap = null
+      exportPending = false
       try {
+        // Let Vue detach the previous previews before decoding the next photo.
+        await nextTick()
+        if (id !== requestId) return
+        mark('previous-image-released')
+        mark('image-decoding', { type: file.type, bytes: file.size }, true)
+        diagnostics.record('image-metadata', {}, { image: { type: file.type, bytes: file.size } })
         const decoded = await createImageBitmap(file, { imageOrientation: 'from-image' })
         if (id !== requestId) { decoded.close(); return }
         imageBitmap = decoded
@@ -409,7 +442,7 @@ createApp({
       activeRequest = null
       statusDetail.value = `Background removed on ${backend.value}. Choose a backdrop, then download or share your image.`
       mark('complete', { pngBytes: exportFile?.size }, false)
-      if (queuedFile) { const next = queuedFile; queuedFile = null; await acceptFile(next) }
+      runQueuedFile()
     }
 
     function updateExport() {
@@ -455,9 +488,7 @@ createApp({
         exportBusy.value = false
         exportTask = null
         if (phase.value === 'complete' && queuedFile) {
-          const next = queuedFile
-          queuedFile = null
-          acceptFile(next)
+          runQueuedFile()
         }
       })
       return exportTask
@@ -488,6 +519,7 @@ createApp({
       window.addEventListener('unhandledrejection', rejectedPromise)
       window.addEventListener('pagehide', pageLeaving)
       document.addEventListener('visibilitychange', pageHidden)
+      loadModel()
     })
     onUnmounted(() => {
       clearTimeout(slowTimer)
@@ -504,6 +536,6 @@ createApp({
   busy, currentChoice, stageText, cacheSize, previewStyle,
   refreshCache, clearCache, loadModel, acceptFile, onFileChange, onDrop,
   selectBackground, shareImage, shareBusy, canShareFile, exportMessage, exportBusy,
-  copyDiagnostics, diagnosticText, diagnosticMessage, interruptedNotice, cancelRun, retryWasm, previewError, preferWasm, APP_VERSION }
+  copyDiagnostics, diagnosticText, diagnosticMessage, interruptedNotice, cancelRun, retryWasm, previewError, preferWasm, canRetry, APP_VERSION }
   },
 }).mount('#app')

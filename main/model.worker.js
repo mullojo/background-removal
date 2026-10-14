@@ -79,7 +79,20 @@ self.onmessage = async ({ data }) => {
       const image = Array.isArray(result) ? result[0] : result
       if (!image?.data || !image.width || !image.height || ![1, 4].includes(image.channels)) throw new Error('The model returned an unexpected image format.')
       const pixels = new Uint8Array(image.width * image.height)
-      for (let i = 0; i < pixels.length; i++) pixels[i] = image.data[i * image.channels + (image.channels === 4 ? 3 : 0)]
+      let min = 255, max = 0, sum = 0, foreground = 0
+      for (let i = 0; i < pixels.length; i++) {
+        const alpha = image.data[i * image.channels + (image.channels === 4 ? 3 : 0)]
+        pixels[i] = alpha
+        min = Math.min(min, alpha)
+        max = Math.max(max, alpha)
+        sum += alpha
+        if (alpha >= 128) foreground++
+      }
+      self.postMessage({ type: 'diagnostic', id: data.id, stage: 'mask-summary', details: {
+        width: image.width, height: image.height, minAlpha: min, maxAlpha: max,
+        meanAlpha: Math.round(sum / pixels.length * 100) / 100,
+        foregroundPercent: Math.round(foreground / pixels.length * 10000) / 100,
+      } })
       self.postMessage({ type: 'result', id: data.id, width: image.width, height: image.height, channels: 1, pixels }, [pixels.buffer])
     }
   } catch (error) {

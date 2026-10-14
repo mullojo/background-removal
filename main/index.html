@@ -52,8 +52,8 @@
             <div v-if="phase === 'loading' && downloadProgress !== null" class="progress-wrap"><div class="progress-track"><span :style="{ width: `${downloadProgress}%` }"></span></div><small>{{ downloadFile }} · {{ downloadProgress }}%</small></div>
             <p v-if="error" class="error-text">{{ error }}</p>
             <button v-if="busy && !exportBusy && phase !== 'compositing'" class="text-action" @click="cancelRun">Stop processing</button>
-            <button v-if="phase === 'error' && originalUrl && !busy" class="button button-outline full" @click="retryWasm">Retry with WASM <span aria-hidden="true">↗</span></button>
-            <button v-if="!backend && !busy" class="button button-outline full" @click="loadModel">Load model ahead of time <span aria-hidden="true">↗</span></button>
+            <button v-if="phase === 'error' && canRetry && !busy" class="button button-outline full" @click="retryWasm">Retry with WASM <span aria-hidden="true">↗</span></button>
+            <button v-if="!backend && !busy" class="button button-outline full" @click="loadModel()">Load model <span aria-hidden="true">↗</span></button>
           </div>
 
           <div class="control-section backdrop-section"><span class="section-index">03 / FINISH</span><div class="section-title-row"><div><h2>Choose a backdrop</h2><p class="section-description">Preview a look, then export it as a PNG.</p></div></div>

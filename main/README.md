@@ -27,13 +27,19 @@ The model is cached in the browser's Cache Storage for this origin. The **Model 
 
 Model: [onnx-community/ormbg-ONNX](https://huggingface.co/onnx-community/ormbg-ONNX), Apache 2.0. The app uses Transformers.js **4.3.0**. It first tries **WebGPU with FP16** weights (about 88.1 MB). If WebGPU is absent or fails during loading or processing, it retries with **WASM and Q8** weights (about 44.3 MB). The status panel shows which engine loaded. A fallback downloads a separate model file on first use. Earlier Vite editions are indexed in [`../archive/README.md`](../archive/README.md).
 
+The model loads automatically when the page opens. A photo selected while loading
+waits until the model is ready before it is decoded. Only the latest waiting photo
+is retained. Changing photos releases the previous previews and image resources
+before decoding the next one; the loaded model is retained for reuse. Clearing the
+model cache leaves it empty until the next upload or **Load model** action.
+
 For the model architecture and the browser processing flow, see the [main project README](../README.md#ormbg-model-architecture).
 
 ## Mobile saving and troubleshooting
 
 **Download image** saves the selected PNG. On browsers that support sharing image files, **Share / Save…** opens the native share sheet. On iPhone, choose **Save Image** to save to Photos when that action is available. The shared file includes the selected transparent, solid-color, or gradient background.
 
-Open **Help & diagnostics → Copy diagnostics** to copy browser details, image dimensions/type/size, processing stages, backend, and captured errors. Photos and filenames are not included. Recent steps are stored locally in this browser, so an unfinished earlier session can be included after reopening the page. A full browser process crash may not deliver a JavaScript error; the last recorded stage helps narrow it down. Nothing is sent automatically.
+Open **Help & diagnostics → Copy diagnostics** to copy browser details, image dimensions/type/size, processing stages, backend, mask alpha statistics, and captured errors. Photos and filenames are not included. Recent steps are stored locally in this browser, so an unfinished earlier session can be included after reopening the page. A full browser process crash may not deliver a JavaScript error; the last recorded stage helps narrow it down. Nothing is sent automatically.
 
 Use **Stop processing** if a run stalls. After a handled error, **Retry with WASM** reloads the model on the CPU backend. After a full-page crash, reopen the page and enable **Use WASM for the next run** under diagnostics before choosing the image again. This option lasts for the current page session.
 

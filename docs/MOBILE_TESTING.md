@@ -36,6 +36,34 @@ The successful report also included the first interrupted session as history; it
 
 Version `2026-10-13-mobile-2` releases the full-resolution decoded photo before inference and renders only the small previews in the page. Its diagnostics add `original-released-before-inference`, preview dimensions, an estimated decoded RGBA size, and `export-image-decoding`/`export-image-decoded` stages. These help distinguish a model-time interruption from a later full-resolution export failure. Retest the same original images on the phone; success on a desktop is not confirmation of an iPhone fix.
 
+## Mobile-3 follow-up
+
+Version `2026-10-13-mobile-3` automatically starts model loading on page open and
+waits for readiness before decoding a waiting upload. Changing images detaches
+the old previews and releases their URLs, bitmap, canvas, and export references
+before the next decode. The model itself stays loaded for reuse. A queued upload
+retains its WASM preference; cancellation clears it. A loading failure permits
+WASM retry of the selected source even before a preview exists.
+
+The latest `mobile-2` report showed the same 698 × 1467 PNG interrupting during
+inference, then succeeding after manual preloading with 1699 ms inference. This
+motivates sequencing model loading before decoding, but does not prove it fixes
+the underlying interruption. The new `worker:mask-summary` event records minimum,
+maximum, and mean alpha (0–255) and the percentage of mask pixels with alpha at
+least 128. It helps identify an empty or nearly full mask without saving the mask;
+it cannot establish whether the correct subject was selected.
+
+Retest on iPhone: upload immediately while the model is loading, upload again after
+it is ready, change images repeatedly, and compare WASM. Copy diagnostics after
+an incomplete result or immediately after reopening following a crash. Expect
+`model-ready` before `image-decoding`, `previous-image-released` before each decode,
+and `worker:mask-summary` after successful inference.
+
+Local native-Canvas checks with simulated workers cover startup queuing, decoding
+order, resource release, cancellation, failed preload recovery, WASM selection,
+soft transparency, sharing, and full-resolution export of a 24.5 MP source. They
+do not validate actual model execution or physical iPhone stability.
+
 ## Remote inspection from a Mac
 
 On iPhone, enable **Settings → Apps → Safari → Advanced → Web Inspector**. On Mac, enable **Safari → Settings → Advanced → Show features for web developers**. Connect and trust the phone, open the app on the phone, then select **Develop → your iPhone → the app URL** in Mac Safari. Open Console before reproducing the issue.
