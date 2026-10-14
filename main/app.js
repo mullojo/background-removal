@@ -1,13 +1,16 @@
 import { createApp, computed, nextTick, onMounted, onUnmounted, ref } from './vendor/vue-3.5.43.esm-browser.prod.js'
 import { APP_VERSION, createDiagnostics } from './diagnostics.js'
 import { createPwa } from './pwa.js'
+import { GivingPanel } from './giving-ui.js'
+import { useSupporterStudio, coverRect } from './supporter-studio.js'
 
 createApp({
   template: '#app-template',
+  components: { GivingPanel },
   setup() {
 
     const CACHE_KEY = 'transformers-cache'
-    const choices = [
+    const baseChoices = [
       { id: 'transparent', name: 'Transparent', kind: 'transparent' },
       { id: 'white', name: 'White', kind: 'solid', color: '#ffffff' },
       { id: 'cream', name: 'Cream', kind: 'solid', color: '#f2eadc' },
@@ -18,6 +21,9 @@ createApp({
       { id: 'sunset', name: 'Sunset', kind: 'gradient', colors: ['#ffd7ad', '#e9adc3'] },
     ]
 
+    const choices = ref([...baseChoices])
+    const givingPanel = ref(null)
+    const givingOpen = ref(false)
     const fileInput = ref(null)
     const fileName = ref('')
     const dimensions = ref('')
@@ -66,17 +72,36 @@ createApp({
     let exportPending = false
     let slowTimer
     let pwa
+    let batchCompletion = null
 
     const busy = computed(() => exportBusy.value || ['preparing', 'loading', 'processing', 'compositing'].includes(phase.value))
-    const currentChoice = computed(() => choices.find(choice => choice.id === selected.value) || choices[0])
+    const currentChoice = computed(() => choices.value.find(choice => choice.id === selected.value) || choices.value[0])
+    const exportName = computed(() => `${fileName.value.replace(/\.[^.]+$/, '') || 'image'}-${currentChoice.value.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'backdrop'}.png`)
     const stageText = computed(() => exportBusy.value ? 'Preparing download' : ({ idle: 'Model not loaded', offline: 'Connection needed', preparing: 'Preparing photo', loading: 'Loading model', ready: 'Model ready', processing: 'Removing background', compositing: 'Finishing image', complete: 'Image ready', error: 'Needs attention' })[phase.value])
     const cacheSize = computed(() => !cacheSizeKnown.value ? 'Size unavailable' : `${(cacheBytes.value / 1048576).toFixed(1)} MB`)
     const previewStyle = computed(() => {
       const choice = currentChoice.value
       if (choice.kind === 'solid') return { background: choice.color }
+      if (choice.kind === 'image') return { backgroundImage: `url("${choice.url}")`, backgroundSize: 'cover', backgroundPosition: 'center' }
       if (choice.kind === 'gradient') return { background: `linear-gradient(135deg, ${choice.colors.join(', ')})` }
       return {}
     })
+
+    const studio = useSupporterStudio({
+      isBusy: () => busy.value || shareBusy.value || studio.batchRunning.value || studio.presetSaving.value,
+      processFile: file => new Promise(resolve => { batchCompletion = resolve; acceptFile(file, preferWasm.value, true).catch(fail) }),
+      clearPhoto: () => clearImage(true),
+      getOutput: () => exportFile,
+      onPresets: presets => {
+        choices.value = [...baseChoices, ...presets]
+        if (!choices.value.some(choice => choice.id === selected.value)) selectBackground('transparent')
+      },
+      onError: cause => diagnostics.record('batch-storage-error', errorDetails(cause)),
+    })
+    function settleBatch(success) { const done = batchCompletion; batchCompletion = null; done?.(success) }
+    function getDiagnostics() {
+      return diagnostics.report({ phase: phase.value, backend: backend.value, requestedBackend: preferWasm.value ? 'wasm' : 'auto', error: error.value ? errorDetails(error.value).message : '', backdrop: selected.value, pwa: pwaState.value })
+    }
 
     function makeWorker() {
       worker = new Worker(new URL('./model.worker.js', import.meta.url), { type: 'module' })
@@ -164,7 +189,7 @@ createApp({
     function pageLeaving() { diagnostics.record('pagehide') }
 
     async function copyDiagnostics() {
-      const text = diagnostics.report({ phase: phase.value, backend: backend.value, requestedBackend: preferWasm.value ? 'wasm' : 'auto', error: error.value ? errorDetails(error.value).message : '', backdrop: selected.value, pwa: pwaState.value })
+      const text = getDiagnostics()
       try {
         await navigator.clipboard.writeText(text)
         diagnosticText.value = ''
@@ -240,7 +265,7 @@ createApp({
         const next = queuedFile
         queuedFile = null
         pendingPhoto = null
-        acceptFile(next.file, next.forceWasm)
+        acceptFile(next.file, next.forceWasm, next.fromBatch)
       } else if (pendingPhoto) {
         const next = pendingPhoto
         pendingPhoto = null
@@ -319,6 +344,8 @@ createApp({
       statusDetail.value = 'Copy diagnostics to report this, or try again with WASM.'
       queuedFile = null
       pendingPhoto = null
+      if (studio.batchRunning.value) studio.batchStop.value = true
+      settleBatch(false)
       pwa?.tryUpdate?.()
     }
 
@@ -335,11 +362,13 @@ createApp({
       error.value = 'Processing stopped.'
       statusDetail.value = 'Try again with WASM or choose a different image.'
       mark('cancelled', {}, false)
+      studio.batchStop.value = true
+      settleBatch(false)
       pwa?.tryUpdate?.()
     }
 
-    function clearImage() {
-      if (busy.value || shareBusy.value) return
+    function clearImage(fromBatch = false) {
+      if (busy.value || shareBusy.value || (!fromBatch && studio.batchRunning.value)) return
       requestId += 1
       activeRequest = null
       queuedFile = null
@@ -349,7 +378,7 @@ createApp({
       releaseImage()
       sourceFile = null
       canRetry.value = false
-      selected.value = 'transparent'
+      if (!fromBatch) selected.value = 'transparent'
       dragOver.value = false
       error.value = ''
       diagnosticText.value = ''
@@ -367,14 +396,15 @@ createApp({
       acceptFile(sourceFile, true)
     }
 
-    async function acceptFile(file, forceWasm = preferWasm.value) {
+    async function acceptFile(file, forceWasm = preferWasm.value, fromBatch = false) {
+      if (!fromBatch && (studio.batchRunning.value || studio.presetSaving.value)) return
       if (!file) return
       if (!file.type.startsWith('image/')) {
         if (!busy.value) fail(new Error('Choose a JPG, PNG, WebP, or other browser-supported image.'))
         return
       }
       if (busy.value || shareBusy.value) {
-        queuedFile = { file, forceWasm }
+        queuedFile = { file, forceWasm, fromBatch }
         if (activeRequest === null && phase.value === 'loading') {
           sourceFile = file
           canRetry.value = true
@@ -522,7 +552,8 @@ createApp({
       activeRequest = null
       statusDetail.value = `Background removed on ${backend.value}. Choose a backdrop, then download or share your image.`
       mark('complete', { pngBytes: exportFile?.size }, false)
-      runQueuedFile()
+      settleBatch(true)
+      if (!studio.batchRunning.value) runQueuedFile()
     }
 
     function updateExport() {
@@ -544,13 +575,19 @@ createApp({
               canvas.height = cutoutCanvas.height
               const context = context2d(canvas)
               if (choice.kind === 'solid') context.fillStyle = choice.color
-              else {
+              else if (choice.kind === 'gradient') {
                 const gradient = context.createLinearGradient(0, 0, canvas.width, canvas.height)
                 gradient.addColorStop(0, choice.colors[0])
                 gradient.addColorStop(1, choice.colors[1])
                 context.fillStyle = gradient
               }
-              context.fillRect(0, 0, canvas.width, canvas.height)
+              if (choice.kind === 'image') {
+                const backdrop = await createImageBitmap(choice.blob)
+                try {
+                  const rect = coverRect(backdrop.width, backdrop.height, canvas.width, canvas.height)
+                  context.drawImage(backdrop, rect.x, rect.y, rect.width, rect.height)
+                } finally { backdrop.close() }
+              } else context.fillRect(0, 0, canvas.width, canvas.height)
               context.drawImage(cutoutCanvas, 0, 0)
             }
             const blob = choice.kind === 'transparent' ? cutoutBlob : await new Promise(resolve => canvas.toBlob(resolve, 'image/png'))
@@ -558,7 +595,7 @@ createApp({
             if (currentResult !== resultUrl.value || choice.id !== selected.value) continue
             revoke(exportUrl.value)
             exportUrl.value = URL.createObjectURL(blob)
-            exportFile = new File([blob], `${fileName.value.replace(/\.[^.]+$/, '') || 'image'}-${choice.id}.png`, { type: 'image/png' })
+            exportFile = new File([blob], exportName.value, { type: 'image/png' })
             canShareFile.value = Boolean(navigator.share && navigator.canShare?.({ files: [exportFile] }))
             exportMessage.value = ''
             mark('export-ready', { backdrop: choice.id, bytes: blob.size, fileSharing: canShareFile.value }, phase.value === 'compositing')
@@ -574,7 +611,10 @@ createApp({
       return exportTask
     }
 
-    function selectBackground(id) { selected.value = id; updateExport() }
+    function selectBackground(id) {
+      if (studio.batchRunning.value || studio.presetSaving.value) return
+      selected.value = id; updateExport()
+    }
 
     async function shareImage() {
       if (!exportFile || busy.value || shareBusy.value) return
@@ -593,10 +633,11 @@ createApp({
     }
 
     onMounted(() => {
+      studio.initialize()
       mark('app-opened', { version: APP_VERSION }, false)
       refreshCache()
       pwa = createPwa({
-        isBusy: () => busy.value || shareBusy.value,
+        isBusy: () => busy.value || shareBusy.value || studio.batchRunning.value || studio.presetSaving.value || givingOpen.value,
         hasImage: () => canRetry.value,
         onDiagnostic: (event, details) => diagnostics.record(event, details),
         onChange: state => {
@@ -611,6 +652,7 @@ createApp({
       loadModel()
     })
     onUnmounted(() => {
+      studio.disposeStudio()
       pwa?.dispose()
       clearTimeout(slowTimer)
       stopWorker('page-unmounted'); imageBitmap?.close(); releaseCanvas(cutoutCanvas)
@@ -620,10 +662,10 @@ createApp({
       window.removeEventListener('pagehide', pageLeaving)
       document.removeEventListener('visibilitychange', pageHidden)
     })
-    return { CACHE_KEY, choices, fileInput, fileName, dimensions, originalUrl, resultUrl, exportUrl,
+    return { ...studio, givingPanel, givingOpen, getDiagnostics, CACHE_KEY, choices, fileInput, fileName, dimensions, originalUrl, resultUrl, exportUrl,
   selected, phase, backend, modelLoaded, downloadFile, downloadProgress, statusDetail, error,
   dragOver, showOriginal, cacheFiles, cacheBytes, cacheAvailable, origin,
-  busy, currentChoice, stageText, cacheSize, previewStyle,
+  busy, currentChoice, exportName, stageText, cacheSize, previewStyle,
   refreshCache, clearCache, loadModel, acceptFile, onFileChange, onDrop, clearImage,
   selectBackground, shareImage, shareBusy, canShareFile, exportMessage, exportBusy,
   copyDiagnostics, diagnosticText, diagnosticMessage, interruptedNotice, cancelRun, retryWasm, previewError, preferWasm, canRetry, APP_VERSION,

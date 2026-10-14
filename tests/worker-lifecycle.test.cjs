@@ -4,6 +4,7 @@ const fs = require('node:fs')
 const path = require('node:path')
 const vm = require('node:vm')
 const root = path.resolve(__dirname, '..')
+const { webcrypto } = require('node:crypto')
 
 test('model sessions dispose before returning a mask, including GPU fallback', async () => {
   const sent = [], sequence = [], loaded = []
@@ -71,7 +72,7 @@ test('successive photos get new workers after releasing prior image resources', 
     }
   }
   const context2d = {
-    drawImage() {}, getImageData: () => ({ data: new Uint8ClampedArray(1024 * 1024 * 4) }),
+    drawImage() {}, fillRect() {}, getImageData: () => ({ data: new Uint8ClampedArray(1024 * 1024 * 4) }),
     createImageData: (width, height) => ({ data: new Uint8ClampedArray(width * height * 4) }), putImageData() {},
   }
   const document = {
@@ -85,7 +86,15 @@ test('successive photos get new workers after releasing prior image resources', 
     static createObjectURL(blob) { const url = `blob:test-${++serial}`; urls.set(url, blob); return url }
     static revokeObjectURL(url) { urls.delete(url) }
   }
+  const localRecords = Object.fromEntries(['settings', 'presets', 'outputs', 'messages'].map(name => [name, new Map()]))
   const context = vm.createContext({
+    GivingPanel: {}, Blob, crypto: webcrypto, requestPersistence: async () => false, downloadBlob() {},
+    localStore: {
+      list: async name => [...localRecords[name].values()],
+      get: async (name, id) => localRecords[name].get(id),
+      put: async (name, item) => localRecords[name].set(item.id, item),
+      remove: async (name, id) => localRecords[name].delete(id),
+    },
     console: { error() {} }, URL: LocalURL, Worker, Blob, File, Uint8ClampedArray, setTimeout, clearTimeout, document,
     window: { location: { origin: 'https://cutout.example' }, addEventListener() {}, removeEventListener() {} },
     navigator: { onLine: true },
@@ -100,6 +109,7 @@ test('successive photos get new workers after releasing prior image resources', 
     },
     createApp: options => ({ mount() { app = options.setup(); mounted.forEach(fn => fn()) } }),
   })
+  vm.runInContext(fs.readFileSync(path.join(root, 'main/supporter-studio.js'), 'utf8').replace(/^import .*\n/gm, '').replaceAll('export ', ''), context)
   vm.runInContext(fs.readFileSync(path.join(root, 'main/app.js'), 'utf8').replace(/^import .*\n/gm, '').replaceAll('import.meta.url', JSON.stringify('https://cutout.example/app.js')), context)
   const untilComplete = async () => {
     for (let i = 0; i < 100 && app.phase.value !== 'complete'; i++) await new Promise(resolve => setTimeout(resolve, 2))
@@ -135,4 +145,16 @@ test('successive photos get new workers after releasing prior image resources', 
   await app.acceptFile(file)
   await untilComplete()
   assert.equal(workers.length, 4)
+  await app.setSupporter(true)
+  app.selectBackground('sage')
+  await new Promise(resolve => setImmediate(resolve))
+  await app.runBatch({ target: { files: [file, file], value: 'selected' } })
+  assert.equal(workers.length, 6, 'Batch photos each get a fresh single-use worker')
+  assert.equal(app.outputs.value.length, 2)
+  assert.ok(app.outputs.value.every(output => output.name.endsWith('-sage.png')), 'Every batch photo uses the chosen backdrop')
+  assert.equal(localRecords.outputs.size, 2, 'Persist outputs before releasing their canvases')
+  assert.equal(app.batchRunning.value, false)
+  assert.equal(app.phase.value, 'idle')
+  assert.equal(urls.size, 0)
+  assert.ok(canvases.every(canvas => canvas.width === 0 && canvas.height === 0))
 })

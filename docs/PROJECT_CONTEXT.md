@@ -104,3 +104,16 @@ GitHub Actions checks changes and publishes matching tags/releases on versioned
 pushes to main. The version is shown in the header/footer. Automatic PWA updates
 wait for an empty image session; Start over permits the pending reload. The first
 upgrade from ui-1 can still require its old update action once.
+
+
+## October 14, 2026 · v1.1.0 supporter studio
+
+The stable app now has local-first Bitcoin giving and supporter features; see
+[GIVING.md](GIVING.md) for payment matching, portable unsigned honor-system
+receipts, IndexedDB stores, batch limits, and message delivery limitations.
+The QR library is bundled. Gifts of $10 or more open brand presets, sequential
+batches, and a local message notebook. No message delivery or backend exists.
+Preserve single-use workers and commit each batch output before releasing the
+current photo. Gift simulations belong only in isolated test previews.
+The value-block journal records this milestone with human hours still pending
+review; do not count unattended AI runtime as human contribution.

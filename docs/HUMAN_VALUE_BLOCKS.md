@@ -110,7 +110,8 @@ Gifts are voluntary; the baseline is not a fee or debt owed by users. The source
 remains available under its [MIT License](../LICENSE), with the third-party
 license details described in the [README](../README.md).
 
-Bitcoin giving is planned. This document does not yet record gifts received,
+Bitcoin giving was implemented locally in v1.1.0 on October 14; see the
+[giving guide](GIVING.md). This document does not yet record gifts received,
 so it makes no claim about a remaining funding balance. Keep received gifts
 separate from contributed-value blocks when a giving record is introduced.
 
@@ -124,3 +125,21 @@ summaries again. If an old estimate changes, record the adjustment and reason.
 | 2026-10-05–2026-10-12 | Bob | Foundation, model lab, initial UI, and organization | 7 | $700 | Provisional estimate |
 | 2026-10-13 | Bob | Mobile reliability, UI polish, PWA, publishing, and v1.0.0 releases | 7 | $700 | Provisional estimate |
 | **Total through v1.0.0** | **Bob** | | **14** | **$1,400** | **Awaiting contributor review** |
+
+## Progress journal · October 14, 2026
+
+₿ Bitcoin giving, styled QR, price quotes, and mempool recognition ♡
+
+🔑 Portable gift recovery/supporter codes and durable local upgrade storage 🔑
+
+🎨 Saved brand colors, gradients, and image backdrops 🎨
+
+📚 Sequential batch processing and a local PNG output shelf 📚
+
+💬 Local messages, optional diagnostics, and supporter documentation 💬
+
+These milestones do **not yet add counted VBs**.
+Work is recorded here as the v1.1.0 milestone; Bob's human time for this session
+has not yet been estimated or reviewed. The contributed-value ledger remains
+**14 VBs / $1,400** until that estimate is added. Unattended AI implementation
+and testing time must not be automatically treated as Bob's human hours.

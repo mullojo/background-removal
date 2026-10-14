@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.1.0 — 2026-10-14
+
+- Add a responsive bitcoin giving dialog with bundled QR Code Styling, wallet links,
+  address/amount copying, live USD quotes, and exact-amount mempool detection.
+- Save pending gift recovery codes and portable supporter receipts in IndexedDB;
+  gifts of $10 USD or more open the local supporter studio. Imported supporter
+  receipts are checked against the transaction again. Codes use an honor system,
+  not signed licenses or proof of payer identity.
+- Add saved color, gradient, and image backdrops, plus sequential batches of up to
+  20 photos with PNG outputs retained in IndexedDB until explicitly removed.
+- Add a local message notebook with optional reviewed diagnostics and JSON export.
+  Messages are not delivered yet; no email service or backend is configured.
+- Preserve the single-use worker memory lifecycle and defer PWA updates while
+  giving, processing batches, or saving presets. Include new modules in offline shell.
+- Add giving/matching/code validation, batch storage-failure, backdrop crop, and
+  batch worker lifecycle checks.
+
 ## 1.0.0 — 2026-10-13
 
 - Begin semantic versioning, with the same version in the app, diagnostics, PWA shell, and GitHub release tag.

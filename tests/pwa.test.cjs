@@ -4,6 +4,7 @@ const fs = require('node:fs')
 const path = require('node:path')
 const vm = require('node:vm')
 const root = path.resolve(__dirname, '..')
+const { webcrypto } = require('node:crypto')
 
 function serviceWorker(scope) {
   const handlers = {}, stores = new Map(), fetched = []
@@ -195,7 +196,15 @@ test('offline uploads wait for connectivity and model readiness; worker failures
   }
   const source = fs.readFileSync(path.join(root, 'main/app.js'), 'utf8')
     .replace(/^import .*\n/gm, '').replaceAll('import.meta.url', JSON.stringify('https://cutout.example/app.js'))
+  const localRecords = Object.fromEntries(['settings', 'presets', 'outputs', 'messages'].map(name => [name, new Map()]))
   const context = vm.createContext({
+    GivingPanel: {}, Blob, crypto: webcrypto, requestPersistence: async () => false, downloadBlob() {},
+    localStore: {
+      list: async name => [...localRecords[name].values()],
+      get: async (name, id) => localRecords[name].get(id),
+      put: async (name, item) => localRecords[name].set(item.id, item),
+      remove: async (name, id) => localRecords[name].delete(id),
+    },
     window, navigator, URL, Worker, Error, Uint8ClampedArray,
     document: events({}), console: { error() {} }, setTimeout, clearTimeout,
     ref: value => ({ value }), computed: getter => ({ get value() { return getter() } }),
@@ -205,6 +214,7 @@ test('offline uploads wait for connectivity and model readiness; worker failures
     createImageBitmap: async () => { decodes++; throw Error('Synthetic decode failure') },
     createApp: options => ({ mount() { app = options.setup(); mounted.forEach(fn => fn()) } }),
   })
+  vm.runInContext(fs.readFileSync(path.join(root, 'main/supporter-studio.js'), 'utf8').replace(/^import .*\n/gm, '').replaceAll('export ', ''), context)
   vm.runInContext(source, context)
   assert.equal(workers.length, 0)
   assert.equal(app.phase.value, 'offline')

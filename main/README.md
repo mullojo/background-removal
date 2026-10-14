@@ -7,13 +7,16 @@ The stable no-build Cutout app, with these editable implementation files:
 - `index.html` — the Vue template, manifest, and library links
 - `style.css` — the original design styles
 - `app.js` — Vue 3 application state and image export
+- `giving.js` and `giving-ui.js` — Bitcoin requests, portable codes, and giving/message UI
+- `supporter-studio.js` — saved brand backdrops and sequential batch processing
+- `local-store.js` — IndexedDB storage and local downloads
 - `model.worker.js` — Transformers.js model loading and inference
 - `diagnostics.js` — bounded local processing logs and recovery after an interrupted session
 - `version.js` — generated from the repository VERSION file
 - `pwa.js` — install, connectivity, and update controls
 - `service-worker.js` — versioned offline app shell
 - `manifest.webmanifest` and `icons/` — app identity and editable SVG logo
-- `vendor/` — pinned Vue and Tailwind runtimes with upstream licenses
+- `vendor/` — pinned Vue, Tailwind, and QR Code Styling runtimes with upstream licenses
 
 No npm install, bundler, compilation, or build command is needed. Vue 3 and Tailwind CSS 4 are bundled locally. Transformers.js and the ORMBG model load remotely. Photos are processed locally in the browser.
 
@@ -61,9 +64,19 @@ shown as a small caption below the main controls.
 
 [Desktop toolbar](../docs/images/cutout-toolbar-desktop.jpg) · [Phone toolbar](../docs/images/cutout-toolbar-mobile.jpg)
 
+## Giving and supporter extras
+
+**Give & grow** opens the Bitcoin giving dialog. Gifts of $10 USD or more open
+saved color/gradient/image backdrops, batches of up to 20 photos, and a local
+message notebook with optional diagnostics. Gift recovery/supporter codes can be
+saved, copied, and restored; the upgrade and finished batch PNGs use IndexedDB.
+Messages stay local and are not delivered yet. Codes use an unsigned honor system.
+See the [giving guide](../docs/GIVING.md) for payment matching, storage limits,
+privacy, and phone testing.
+
 ## Mobile saving and troubleshooting
 
-**Download image** saves the selected PNG. On browsers that support sharing image files, **Share / Save…** opens the native share sheet. On iPhone, choose **Save Image** to save to Photos when that action is available. The shared file includes the selected transparent, solid-color, or gradient background.
+**Download image** saves the selected PNG. On browsers that support sharing image files, **Share / Save…** opens the native share sheet. On iPhone, choose **Save Image** to save to Photos when that action is available. The shared file includes the selected transparent, solid-color, gradient, or saved image background.
 
 Open **Help & diagnostics → Copy diagnostics** to copy browser details, image dimensions/type/size, processing stages, backend, mask alpha statistics, and captured errors. Photos and filenames are not included. Recent steps are stored locally in this browser, so an unfinished earlier session can be included after reopening the page. A full browser process crash may not deliver a JavaScript error; the last recorded stage helps narrow it down. Nothing is sent automatically.
 

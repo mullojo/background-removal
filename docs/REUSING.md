@@ -19,6 +19,10 @@ support either layout. Use HTTP for localhost testing, HTTPS for public installs
 | `main/index.html` | Product copy, Vue template, title, metadata, visible brand name |
 | `main/style.css` | Colors, typography, spacing, responsive layout, header mark |
 | `main/app.js` | Backdrop choices, image handling, export behavior |
+| `main/giving.js` | Bitcoin recipient address, quote provider, matching, and portable receipt format |
+| `main/giving-ui.js` | Giving dialog, supporter benefits, local message notebook |
+| `main/supporter-studio.js` | Saved backdrops, batch limits, local output shelf |
+| `main/local-store.js` | IndexedDB name/schema and download helper |
 | `main/model.worker.js` | Model ID, backend choices, inference and mask extraction |
 | `VERSION` and `scripts/release.mjs` | Authoritative version and release preparation |
 | `main/version.js` | Generated app version; do not edit separately |
@@ -35,7 +39,9 @@ Keep the icon background opaque for Apple/maskable use. Replace all exports alon
 with the SVG. The header mark currently uses matching CSS shapes in `style.css`.
 
 A separately branded app should get its own manifest identity, diagnostics storage
-key, and shell-cache prefix. Keep an existing deployed app's identity stable across
+key, IndexedDB database name, and shell-cache prefix. Set its intended Bitcoin
+recipient in `main/giving.js`; copying the default preserves Cutout’s gift address.
+See [GIVING.md](GIVING.md) before changing receipt or payment behavior. Keep an existing deployed app's identity stable across
 ordinary updates. Changing models may require different preprocessing and output
 handling; changing the model ID alone is not sufficient for every model.
 
@@ -58,6 +64,6 @@ handling; changing the model ID alone is not sufficient for every model.
    on the target phone. A versioned push also publishes its GitHub release. See
    [VERSIONING.md](VERSIONING.md), [PWA.md](PWA.md) and [MOBILE_TESTING.md](MOBILE_TESTING.md).
 
-Vue/Tailwind are pinned local copies with upstream MIT notices. See
+Vue/Tailwind/QR Code Styling are pinned local copies with upstream MIT notices. See
 [`main/vendor/README.md`](../main/vendor/README.md) before updating them.
 Transformers.js remains pinned to a remote CDN version in the model worker.

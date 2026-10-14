@@ -70,7 +70,9 @@ and effort contributed in [human value blocks](docs/HUMAN_VALUE_BLOCKS.md):
 approximately one hour per block, valued at $100 toward a voluntary support
 baseline. The initial retrospective estimate through v1.0.0 is **14 blocks /
 $1,400**, including **7 blocks / $700 on October 13, 2026**. These are provisional
-estimates, with assumptions and ranges in the record. Bitcoin giving is planned.
+estimates, with assumptions and ranges in the record. The app now includes bitcoin giving, portable supporter codes, saved brand
+backdrops, batch processing, and a local message notebook. See the
+[giving and supporter guide](docs/GIVING.md) for the flow and current limitations.
 
 ### Hosting and licensing
 
