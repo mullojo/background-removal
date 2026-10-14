@@ -2,15 +2,23 @@
 
 **[Open the live app](https://background-removal.pages.dev/)** · [MIT License](../LICENSE)
 
-The stable no-build Cutout app, organized as five editable files:
+The stable no-build Cutout app, with these editable implementation files:
 
-- `index.html` — the Vue template and CDN links
+- `index.html` — the Vue template, manifest, and library links
 - `style.css` — the original design styles
 - `app.js` — Vue 3 application state and image export
 - `model.worker.js` — Transformers.js model loading and inference
 - `diagnostics.js` — bounded local processing logs and recovery after an interrupted session
+- `pwa.js` — install, connectivity, and update controls
+- `service-worker.js` — versioned offline app shell
+- `manifest.webmanifest` and `icons/` — app identity and editable SVG logo
+- `vendor/` — pinned Vue and Tailwind runtimes with upstream licenses
 
-No npm install, bundler, compilation, or build command is needed. Vue 3, Tailwind CSS 4, and Transformers.js load from versioned CDNs. The first visit needs an internet connection for those libraries and the ORMBG model. Photos are processed locally in the browser.
+No npm install, bundler, compilation, or build command is needed. Vue 3 and Tailwind CSS 4 are bundled locally. Transformers.js and the ORMBG model load remotely. Photos are processed locally in the browser.
+
+The app can be installed on a home screen or desktop and reopen its interface
+offline after the shell is cached. Connect to load the model and process photos.
+See [PWA behavior and testing](../docs/PWA.md) and [reuse instructions](../docs/REUSING.md).
 
 ## Run
 

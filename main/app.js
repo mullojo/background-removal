@@ -1,5 +1,6 @@
-import { createApp, computed, nextTick, onMounted, onUnmounted, ref } from 'https://unpkg.com/vue@3.5.43/dist/vue.esm-browser.prod.js'
+import { createApp, computed, nextTick, onMounted, onUnmounted, ref } from './vendor/vue-3.5.43.esm-browser.prod.js'
 import { APP_VERSION, createDiagnostics } from './diagnostics.js'
+import { createPwa } from './pwa.js'
 
 createApp({
   template: '#app-template',
@@ -44,6 +45,7 @@ createApp({
     const diagnosticMessage = ref('')
     const preferWasm = ref(false)
     const canRetry = ref(false)
+    const pwaState = ref({ installed: false, installable: false, offline: false, updateAvailable: false, message: '' })
     const diagnostics = createDiagnostics()
     const interruptedNotice = diagnostics.previous ? `An earlier session ended during “${diagnostics.previous.stage}”. Its last steps are included in Copy diagnostics.` : ''
     const origin = window.location.origin
@@ -60,10 +62,11 @@ createApp({
     let exportTask = null
     let exportPending = false
     let slowTimer
+    let pwa
 
     const busy = computed(() => exportBusy.value || ['preparing', 'loading', 'processing', 'compositing'].includes(phase.value))
     const currentChoice = computed(() => choices.find(choice => choice.id === selected.value) || choices[0])
-    const stageText = computed(() => exportBusy.value ? 'Preparing download' : ({ idle: 'Model not loaded', preparing: 'Preparing photo', loading: 'Loading model', ready: 'Model ready', processing: 'Removing background', compositing: 'Finishing image', complete: 'Image ready', error: 'Needs attention' })[phase.value])
+    const stageText = computed(() => exportBusy.value ? 'Preparing download' : ({ idle: 'Model not loaded', offline: 'Connection needed', preparing: 'Preparing photo', loading: 'Loading model', ready: 'Model ready', processing: 'Removing background', compositing: 'Finishing image', complete: 'Image ready', error: 'Needs attention' })[phase.value])
     const cacheSize = computed(() => !cacheSizeKnown.value ? 'Size unavailable' : `${(cacheBytes.value / 1048576).toFixed(1)} MB`)
     const previewStyle = computed(() => {
       const choice = currentChoice.value
@@ -80,11 +83,15 @@ createApp({
         if (worker !== currentWorker) return
         fail(new Error(event.message || 'The model worker stopped unexpectedly.'))
         worker.terminate()
-        makeWorker()
+        worker = null
         backend.value = ''
       }
       worker.onmessageerror = () => {
-        if (worker === currentWorker) fail(new Error('The model worker returned an unreadable message.'))
+        if (worker !== currentWorker) return
+        fail(new Error('The model worker returned an unreadable message.'))
+        worker.terminate()
+        worker = null
+        backend.value = ''
       }
     }
 
@@ -123,7 +130,7 @@ createApp({
     function pageLeaving() { diagnostics.record('pagehide') }
 
     async function copyDiagnostics() {
-      const text = diagnostics.report({ phase: phase.value, backend: backend.value, requestedBackend: preferWasm.value ? 'wasm' : 'auto', error: error.value ? errorDetails(error.value).message : '', backdrop: selected.value })
+      const text = diagnostics.report({ phase: phase.value, backend: backend.value, requestedBackend: preferWasm.value ? 'wasm' : 'auto', error: error.value ? errorDetails(error.value).message : '', backdrop: selected.value, pwa: pwaState.value })
       try {
         await navigator.clipboard.writeText(text)
         diagnosticText.value = ''
@@ -167,8 +174,8 @@ createApp({
       if (busy.value) return
       try {
         worker?.terminate()
+        worker = null
         await caches.delete(CACHE_KEY)
-        makeWorker()
         backend.value = ''
         phase.value = resultUrl.value ? 'complete' : 'idle'
         statusDetail.value = 'Model cache cleared. The next run will download it again.'
@@ -181,6 +188,12 @@ createApp({
 
     function loadModel(forceWasm = preferWasm.value) {
       if (busy.value || (backend.value && (!forceWasm || backend.value === 'WASM · Q8'))) return
+      if (navigator.onLine === false) {
+        phase.value = 'offline'
+        statusDetail.value = 'Connect to the internet to load the model. Your photo will wait on this device.'
+        return
+      }
+      if (!worker) makeWorker()
       error.value = ''
       phase.value = 'loading'
       statusDetail.value = 'Connecting to Hugging Face for the model files…'
@@ -268,7 +281,7 @@ createApp({
       clearTimeout(slowTimer)
       queuedFile = null
       worker?.terminate()
-      makeWorker()
+      worker = null
       backend.value = ''
       imageBitmap?.close()
       imageBitmap = null
@@ -281,7 +294,7 @@ createApp({
     function retryWasm() {
       if (!sourceFile || busy.value) return
       worker?.terminate()
-      makeWorker()
+      worker = null
       backend.value = ''
       preferWasm.value = true
       acceptFile(sourceFile, true)
@@ -514,7 +527,15 @@ createApp({
 
     onMounted(() => {
       mark('app-opened', { version: APP_VERSION }, false)
-      makeWorker(); refreshCache()
+      refreshCache()
+      pwa = createPwa({
+        isBusy: () => busy.value || shareBusy.value,
+        onDiagnostic: (event, details) => diagnostics.record(event, details),
+        onChange: state => {
+          pwaState.value = state
+          if (!state.offline && phase.value === 'offline') loadModel(queuedFile?.forceWasm ?? preferWasm.value)
+        },
+      })
       window.addEventListener('error', globalError)
       window.addEventListener('unhandledrejection', rejectedPromise)
       window.addEventListener('pagehide', pageLeaving)
@@ -522,6 +543,7 @@ createApp({
       loadModel()
     })
     onUnmounted(() => {
+      pwa?.dispose()
       clearTimeout(slowTimer)
       worker?.terminate(); imageBitmap?.close(); releaseCanvas(cutoutCanvas)
       revoke(originalUrl.value); revoke(resultUrl.value); revoke(exportUrl.value)
@@ -536,6 +558,7 @@ createApp({
   busy, currentChoice, stageText, cacheSize, previewStyle,
   refreshCache, clearCache, loadModel, acceptFile, onFileChange, onDrop,
   selectBackground, shareImage, shareBusy, canShareFile, exportMessage, exportBusy,
-  copyDiagnostics, diagnosticText, diagnosticMessage, interruptedNotice, cancelRun, retryWasm, previewError, preferWasm, canRetry, APP_VERSION }
+  copyDiagnostics, diagnosticText, diagnosticMessage, interruptedNotice, cancelRun, retryWasm, previewError, preferWasm, canRetry, APP_VERSION,
+  pwaState, installApp: () => pwa?.install(), updateApp: () => pwa?.update() }
   },
 }).mount('#app')

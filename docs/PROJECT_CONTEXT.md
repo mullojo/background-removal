@@ -80,3 +80,8 @@ preserved; preload failures retaining a source for WASM retry; and mask alpha
 statistics in diagnostics. Local simulated-worker/native-Canvas checks passed for
 these flows and full-resolution PNG export. This supersedes the unfinished status
 above. Actual iPhone/model execution remains to be retested after deployment.
+
+The next release, `2026-10-13-pwa-1`, adds an installable stable app, SVG/PNG install
+icons, an offline shell with bundled Vue/Tailwind runtimes, explicit update controls,
+connectivity/standalone diagnostics, README screenshots, and reuse/PWA guides.
+The inference runtime and model weights remain outside the offline shell.

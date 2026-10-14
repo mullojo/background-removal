@@ -1,0 +1,13 @@
+# Bundled UI runtimes
+
+Pinned copies make the PWA interface independent of a CDN. These files require no
+build step. Preserve the upstream license notices when copying this project.
+
+| File | Source | License |
+| --- | --- | --- |
+| `vue-3.5.43.esm-browser.prod.js` | https://unpkg.com/vue@3.5.43/dist/vue.esm-browser.prod.js | MIT, `VUE-LICENSE.txt` |
+| `tailwind-browser-4.3.3.js` | https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4.3.3 | MIT, `TAILWIND-LICENSE.txt` |
+
+To update, download the intended pinned release and its license, update the HTML
+or module import and the service worker's file list, and bump the shell release.
+Transformers.js and model weights remain remote and are not bundled here.

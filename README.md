@@ -6,6 +6,25 @@ A local browser tool for removing the background from a photo, previewing a tran
 
 This folder can stand alone now and can later sit inside a larger collection of photo and video tools. It contains only the photo background-removal project.
 
+![Cutout with its upload canvas, loaded model, and backdrop choices](docs/images/cutout-studio.png)
+
+*Screenshot supplied by the project owner, with the model ready and no personal photo loaded.*
+
+## Install or reuse
+
+The stable app is an installable PWA with a home-screen icon, standalone window,
+offline interface, and an explicit update action. Open the live app in Safari on
+iPhone/iPad and choose **Share → Add to Home Screen**, or use your desktop browser's
+install action when available. Model loading and photo processing still require
+a connection in this release; installation does not bundle the inference runtime
+or model weights. See the [PWA guide](docs/PWA.md) for behavior and testing.
+
+To make your own version, copy `main/` to a static HTTPS host, retain the license
+notices, and customize the template, colors, and editable SVG logo. No build tool
+or backend is required. The manifest and service worker use relative paths so
+the app can be hosted at `/` or in a subdirectory. See the
+[reuse and maintenance guide](docs/REUSING.md) for the file map and update checklist.
+
 ## Versions
 
 | Folder | Purpose | Models and runtime |
@@ -24,7 +43,7 @@ The no-build versions need a local HTTP server for ES modules and the model work
 python3 -m http.server 8765 --bind 127.0.0.1
 ```
 
-Open `http://127.0.0.1:8765/main/` for the stable app or `http://127.0.0.1:8765/lab/` for comparisons. No npm install is needed for these two versions. First use needs internet access for the CDN libraries and model files. A file opened directly with `file://` will not run the worker.
+Open `http://127.0.0.1:8765/main/` for the stable app or `http://127.0.0.1:8765/lab/` for comparisons. No npm install is needed for these two versions. The stable app bundles its UI libraries; model loading needs internet access for Transformers.js and model files. The lab still loads its UI libraries from CDNs. A file opened directly with `file://` will not run the worker.
 
 ### VS Code Live Server
 

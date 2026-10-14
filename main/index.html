@@ -4,9 +4,15 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="theme-color" content="#f5f5f2" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="Cutout" />
+  <link rel="manifest" href="./manifest.webmanifest" />
+  <link rel="icon" type="image/svg+xml" href="./icons/logo.svg" />
+  <link rel="apple-touch-icon" sizes="180x180" href="./icons/apple-touch-icon.png" />
   <title>Cutout — Background removal studio</title>
   <meta name="description" content="Remove photo backgrounds privately in your browser, then export with a color or gradient." />
-  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4.3.3"></script>
+  <script src="./vendor/tailwind-browser-4.3.3.js"></script>
   <link rel="stylesheet" href="./style.css" />
 </head>
 <body>
@@ -64,6 +70,16 @@
           </div>
 
           <div class="cache-section"><div class="cache-top"><span class="section-index">MODEL STORAGE</span><span class="cache-indicator"></span></div><p>Saved in this browser’s <strong>Cache Storage</strong> for <code>{{ origin }}</code>. Find it in Developer Tools → Application → Cache Storage → <code>{{ CACHE_KEY }}</code>.</p><div class="cache-footer"><span>{{ cacheAvailable ? `${cacheFiles} cached files · ${cacheFiles ? cacheSize : 'No model saved yet'}` : 'Cache Storage unavailable' }}</span><button :disabled="!cacheFiles || busy" @click="clearCache">Clear model cache ↗</button></div></div>
+          <section class="pwa-section" aria-label="Install Cutout">
+            <div class="pwa-heading"><img src="./icons/icon-192.png" width="40" height="40" alt="" /><div><strong>{{ pwaState.installed ? 'Cutout is installed' : 'Keep Cutout close' }}</strong><span>{{ pwaState.installed ? 'Your photo studio, in its own window.' : 'Add your photo studio to your home screen or desktop.' }}</span></div></div>
+            <button v-if="pwaState.installable && !pwaState.installed" class="button button-outline full" @click="installApp">Install Cutout <span aria-hidden="true">↗</span></button>
+            <p v-else-if="!pwaState.installed" class="section-description">On iPhone or iPad, open Safari’s Share menu and choose Add to Home Screen. On desktop, use your browser’s install menu when available.</p>
+            <p class="section-description">{{ pwaState.offline ? 'You’re offline. The interface is available; connect to load the model.' : 'The interface can reopen offline after your first visit. Connect to load the model and process photos.' }}</p>
+            <p class="section-description" role="status">{{ !pwaState.supported ? 'Offline installation is unavailable in this browser. Try Safari or Chrome.' : pwaState.offlineReady ? 'Offline interface ready.' : 'Preparing the offline interface…' }}</p>
+            <button v-if="pwaState.updateAvailable" class="button button-outline full" :disabled="busy || shareBusy" @click="updateApp">Update app <span aria-hidden="true">↻</span></button>
+            <p v-if="pwaState.updateAvailable" class="section-description">A new version is ready. Save your image before updating.</p>
+            <p v-if="pwaState.message" class="section-description" role="status">{{ pwaState.message }}</p>
+          </section>
           <details class="diagnostics-section" :open="Boolean(interruptedNotice)"><summary>Help &amp; diagnostics</summary><p v-if="interruptedNotice" class="section-description">{{ interruptedNotice }}</p><p class="section-description">Copy processing steps, image dimensions, browser details, and errors. Photos and filenames are not included. The latest steps are saved in this browser to help after an unexpected reload.</p><label class="wasm-option"><input type="checkbox" v-model="preferWasm" :disabled="busy"> Use WASM for the next run</label><button class="button button-outline full" @click="copyDiagnostics">Copy diagnostics <span aria-hidden="true">↗</span></button><p v-if="diagnosticMessage" class="section-description" role="status">{{ diagnosticMessage }}</p><textarea v-if="diagnosticText" class="diagnostic-report" aria-label="Diagnostic report" :value="diagnosticText" readonly @focus="$event.target.select()"></textarea><small>App {{ APP_VERSION }}</small></details>
         </aside>
       </div>

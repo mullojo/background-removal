@@ -1,4 +1,4 @@
-export const APP_VERSION = '2026-10-13-mobile-3'
+export const APP_VERSION = '2026-10-13-pwa-1'
 const STORAGE_KEY = 'cutout-diagnostics-v1'
 
 export function createDiagnostics() {
@@ -29,6 +29,8 @@ export function createDiagnostics() {
       environment: {
         userAgent: navigator.userAgent,
         secureContext: window.isSecureContext,
+        online: navigator.onLine,
+        standalone: window.matchMedia?.('(display-mode: standalone)').matches || navigator.standalone === true,
         webgpuExposed: Boolean(navigator.gpu),
         hardwareConcurrency: navigator.hardwareConcurrency,
         deviceMemoryGB: navigator.deviceMemory || null,

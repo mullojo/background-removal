@@ -38,6 +38,11 @@ Both active apps are static files, deployed as two Pages projects connected to t
 
 Each project serves its selected app at its own site root. Both demo links are included in the top-level README. Each hosted origin has its own model cache.
 
+The stable output directory now includes the PWA manifest, service worker, icons,
+and bundled UI runtimes. Publish the whole `main/` directory. After editing cached
+app files, bump `RELEASE` in `main/service-worker.js` before committing. Existing
+visitors may see **Update app** when the new shell is ready. See [PWA.md](PWA.md).
+
 Use the HTTPS demo URLs for mobile testing. The stable app prefers WebGPU FP16 and falls back to WASM Q8 if GPU loading or inference fails. The lab exposes backend choices explicitly and reports failures. Test download progress, inference, export, and cache clearing on the target mobile browsers before publishing performance claims.
 
 Official reference: [Cloudflare Pages static HTML deployment](https://developers.cloudflare.com/pages/framework-guides/deploy-anything/).
