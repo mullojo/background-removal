@@ -63,6 +63,17 @@ with changelog notes. See [CHANGELOG.md](CHANGELOG.md) and the
 
 ## Publishing notes
 
+### Human value and gift support
+
+This is an open source, gift-supported project. We record the human attention
+and effort contributed in [human value blocks](docs/HUMAN_VALUE_BLOCKS.md):
+approximately one hour per block, valued at $100 toward a voluntary support
+baseline. The initial retrospective estimate through v1.0.0 is **14 blocks /
+$1,400**, including **7 blocks / $700 on October 13, 2026**. These are provisional
+estimates, with assumptions and ranges in the record. Bitcoin giving is planned.
+
+### Hosting and licensing
+
 The stable app and comparison lab are both live at the links above. See [repository and hosting setup](docs/PUBLISHING.md) for the GitHub Desktop workflow and Cloudflare Pages settings.
 
 The project's source is released under the [MIT License](LICENSE). Third-party libraries and model weights retain their own licenses. `main/` uses the [ORMBG ONNX model](https://huggingface.co/onnx-community/ormbg-ONNX), listed as Apache 2.0. `lab/` includes BRIA RMBG 1.4 for evaluation; its [separate license](https://huggingface.co/briaai/RMBG-1.4) restricts commercial use. See [lab model notes](lab/MODEL_NOTES.md) and [lab dependencies](lab/DEPENDENCIES.md) for the model and library details.
