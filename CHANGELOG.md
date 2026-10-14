@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.2.0 — 2026-10-14
+
+- Simplify giving into amount, payment, and supporter-studio screens, with a $10
+  minimum and compact, readable Tailwind layouts throughout the changed controls.
+- Show supporter passes and restore controls only after a qualifying gift. Saved
+  passes now include a restore link that verifies the gift on another device.
+- Open the native modal immediately, remove backdrop blur, load QR styling only
+  when needed, reuse its QR, and poll only while the giving screen is visible.
+- Add a temporary hidden developer preview: tap the app version seven times, then
+  enable Preview supporter features in Help & diagnostics. It lasts for this tab,
+  issues no code, records no gift, and does not overwrite real supporter access.
+- Preserve pending gift requests, batch worker disposal, local drafts, and safe
+  PWA update behavior. Add minimum-gift, first-paint, and preview-state checks.
+
 ## 1.1.1 — 2026-10-14
 
 - Open every giving prompt through shared Vue state instead of a component ref,

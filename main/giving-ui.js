@@ -1,172 +1,577 @@
-import { ref, computed, nextTick, watch, onMounted, onUnmounted } from './vendor/vue-3.5.43.esm-browser.prod.js'
+import {
+  ref, computed, watch, onMounted, onUnmounted,
+} from './vendor/vue-3.5.43.esm-browser.prod.js'
 import { localStore, requestPersistence, downloadBlob } from './local-store.js'
-import { BITCOIN_ADDRESS, btc, paymentUri, createGiftIntent, addressTransactions, matchingTransactions, manualTransaction, receiptFor, encodeCode, decodeCode, isSupporter, verifyCode, encodeRequest, decodeRequest } from './giving.js'
+import { loadQrLibrary, afterPaint } from './qr-loader.js'
+import {
+  BITCOIN_ADDRESS, apiJson, btc, paymentUri, createGiftIntent,
+  addressTransactions, matchingTransactions, manualTransaction, receiptFor,
+  encodeCode, decodeCode, isSupporter, verifyCode, encodeRequest, decodeRequest,
+} from './giving.js'
 
 export const GivingPanel = {
-  props: { diagnostics: Function, modelValue: Boolean }, emits: ['supporter', 'update:modelValue'],
+  props: {
+    diagnostics: Function,
+    modelValue: Boolean,
+    preview: Boolean,
+  },
+  emits: ['supporter', 'update:modelValue'],
+
   setup(props, { emit }) {
-    const dialog = ref(null), qr = ref(null), opened = ref(false), amount = ref(10), intent = ref(null), receipt = ref(null), supporter = ref(null)
-    const working = ref(false), checking = ref(false), notice = ref(''), issue = ref(''), restore = ref(''), txid = ref('')
-    const message = ref(''), attachDiagnostics = ref(false), drafts = ref([]), persistence = ref(false)
-    const code = computed(() => intent.value ? encodeRequest(intent.value) : receipt.value && isSupporter(receipt.value) ? encodeCode(receipt.value) : supporter.value ? encodeCode(supporter.value) : '')
-    const uri = computed(() => intent.value ? paymentUri(intent.value) : `bitcoin:${BITCOIN_ADDRESS}`)
-    let timer, previousFocus, alive = true
+    const dialog = ref(null)
+    const qr = ref(null)
+    const opened = ref(false)
+    const amount = ref(10)
+    const customAmount = ref(false)
+    const intent = ref(null)
+    const receipt = ref(null)
+    const supporter = ref(null)
+    const givingAgain = ref(false)
+    const restoring = ref(false)
+    const working = ref(false)
+    const checking = ref(false)
+    const notice = ref('')
+    const issue = ref('')
+    const restore = ref('')
+    const txid = ref('')
+    const message = ref('')
+    const attachDiagnostics = ref(false)
+    const drafts = ref([])
+
+    const hasExtras = computed(() => Boolean(supporter.value || props.preview))
+    const showStudio = computed(() => hasExtras.value && !givingAgain.value)
+    const showPayment = computed(() => Boolean(intent.value && !showStudio.value))
+    const code = computed(() => supporter.value ? encodeCode(supporter.value) : '')
+    const uri = computed(() => intent.value ? paymentUri(intent.value) : '')
+    const restoreLink = computed(() => {
+      if (!code.value) return ''
+      const url = new URL(window.location.href)
+      url.hash = new URLSearchParams({ supporter: code.value }).toString()
+      return url.href
+    })
+
+    let timer
+    let previousFocus
+    let alive = true
+    let opening = 0
+    let qrTarget
+    let qrData = ''
+
     async function saveSupporter(value) {
       if (!isSupporter(value)) return
-      await localStore.put('settings', { id: 'supporter', receipt: value, code: encodeCode(value) })
-      supporter.value = value; emit('supporter', true)
-      persistence.value = await requestPersistence()
+      await localStore.put('settings', {
+        id: 'supporter',
+        receipt: value,
+        code: encodeCode(value),
+      })
+      supporter.value = value
+      emit('supporter', true)
+      requestPersistence()
     }
-    async function renderQr() {
-      await nextTick()
-      if (!qr.value || !globalThis.QRCodeStyling) return
-      qr.value.replaceChildren()
-      new globalThis.QRCodeStyling({ width: 256, height: 256, type: 'svg', data: uri.value, margin: 16,
-        qrOptions: { errorCorrectionLevel: 'Q' }, dotsOptions: { color: '#1c3631', type: 'rounded' },
-        cornersSquareOptions: { color: '#ae5f45', type: 'extra-rounded' }, cornersDotOptions: { color: '#1c3631', type: 'dot' },
-        backgroundOptions: { color: '#ffffff' },
-      }).append(qr.value)
+
+    async function renderQr(ticket) {
+      const target = qr.value
+      const data = uri.value
+      if (!target || !data) return
+      if (qrTarget === target && qrData === data && target.firstChild) return
+
+      try {
+        const QRCodeStyling = await loadQrLibrary()
+        if (!opened.value || ticket !== opening || qr.value !== target) return
+        if (qrTarget === target && qrData === data && target.firstChild) return
+        target.replaceChildren()
+        new QRCodeStyling({
+          width: 240,
+          height: 240,
+          type: 'svg',
+          data,
+          margin: 16,
+          qrOptions: { errorCorrectionLevel: 'Q' },
+          dotsOptions: { color: '#1c3631', type: 'rounded' },
+          cornersSquareOptions: { color: '#ae5f45', type: 'extra-rounded' },
+          cornersDotOptions: { color: '#1c3631', type: 'dot' },
+          backgroundOptions: { color: '#ffffff' },
+        }).append(target)
+        qrTarget = target
+        qrData = data
+      } catch (error) {
+        if (opened.value && ticket === opening) issue.value = error.message
+      }
     }
-    async function open() {
-      if (opened.value) return
-      previousFocus = document.activeElement; opened.value = true
-      await nextTick()
-      if (!opened.value || !props.modelValue) return
-      dialog.value.showModal(); dialog.value.scrollTop = 0; renderQr()
-      if (intent.value) checkPayment()
+
+    function stopWatching() {
+      clearInterval(timer)
+      timer = null
     }
+
+    function startWatching() {
+      stopWatching()
+      if (!opened.value || !showPayment.value) return
+      timer = setInterval(() => checkPayment(), 20000)
+    }
+
+    function preparePaymentView() {
+      const ticket = opening
+      // Let the native dialog paint before loading QR code or doing API work.
+      afterPaint(() => {
+        if (!opened.value || ticket !== opening || !showPayment.value) return
+        renderQr(ticket)
+        checkPayment()
+        startWatching()
+      })
+    }
+
+    function open() {
+      if (opened.value || !props.modelValue) return
+      previousFocus = document.activeElement
+      opened.value = true
+      opening += 1
+      dialog.value.showModal()
+      dialog.value.scrollTop = 0
+      if (showPayment.value) preparePaymentView()
+    }
+
     function close() {
       if (!opened.value) return
-      dialog.value?.close(); opened.value = false; emit('update:modelValue', false); previousFocus?.focus()
+      opened.value = false
+      opening += 1
+      stopWatching()
+      dialog.value.close()
+      emit('update:modelValue', false)
+      previousFocus?.focus()
     }
+
     watch(() => props.modelValue, value => value ? open() : close(), { flush: 'post' })
+    watch(showPayment, visible => {
+      if (visible && opened.value) preparePaymentView()
+      else stopWatching()
+    }, { flush: 'post' })
+
+    function chooseAmount(value) {
+      customAmount.value = value === 'other'
+      if (!customAmount.value) amount.value = value
+    }
+
     async function createRequest() {
       if (working.value || checking.value) return
-      working.value = true; issue.value = ''; notice.value = ''
+      working.value = true
+      issue.value = ''
+      notice.value = ''
       try {
         const next = await createGiftIntent(Number(amount.value))
-        // Persist before presenting any payment destination/amount.
         await localStore.put('settings', { id: 'gift-intent', intent: next })
-        intent.value = next; receipt.value = null; txid.value = ''
-        notice.value = 'Your gift request is ready. Send the exact BTC amount so we can recognize it.'
-        await renderQr()
-      } catch (error) { issue.value = error.message }
-      finally { working.value = false }
+        intent.value = next
+        receipt.value = null
+        txid.value = ''
+      } catch (error) {
+        issue.value = error.message
+      } finally {
+        working.value = false
+      }
     }
+
     async function acceptPayment(tx) {
       const value = receiptFor(intent.value, tx)
       await saveSupporter(value)
       await localStore.put('settings', { id: 'last-gift', receipt: value })
       await localStore.remove('settings', 'gift-intent')
-      receipt.value = value; intent.value = null
-      notice.value = isSupporter(value) ? 'Gift seen. Thank you! Your supporter studio is ready.' : 'Gift seen. Thank you for giving to Cutout!'
+      receipt.value = value
+      intent.value = null
+      givingAgain.value = false
+      stopWatching()
+      notice.value = 'Gift received. Thank you for supporting Cutout.'
     }
+
     async function checkPayment(manual = false) {
-      if (!intent.value || checking.value || working.value || document.visibilityState === 'hidden') return
-      checking.value = true; issue.value = ''
+      if (!opened.value || !showPayment.value || checking.value || working.value) return
+      if (document.visibilityState === 'hidden') return
+      checking.value = true
+      if (manual) issue.value = ''
+
       try {
-        const transactions = await addressTransactions()
-        const matches = matchingTransactions(intent.value, transactions)
-        const chosenId = txid.value.trim().toLowerCase()
+        const current = intent.value
+        const chosenId = manual ? txid.value.trim().toLowerCase() : ''
         let match
         if (chosenId) {
-          if (!/^[a-f0-9]{64}$/.test(chosenId)) throw new Error('Enter the 64-character transaction ID from your wallet.')
-          // Direct lookup also recovers a payment no longer in the latest address page.
-          const { apiJson } = await import('./giving.js')
+          if (!/^[a-f0-9]{64}$/.test(chosenId)) {
+            throw new Error('Enter the transaction ID from your wallet: 64 characters.')
+          }
           const tx = await apiJson(`/tx/${chosenId}`)
-          if (tx.txid !== chosenId) throw new Error('Mempool returned a different transaction. Please try again.')
-          match = manualTransaction(intent.value, tx)
-          if (!match) throw new Error('That transaction is not a new payment to Cutout for this gift request.')
-        } else if (matches.length === 1) match = matches[0]
-        else if (matches.length > 1) throw new Error('More than one payment matches. Enter your wallet’s transaction ID below.')
-        if (match) await acceptPayment(match)
-        else notice.value = Date.now() > intent.value.expiresAt
-          ? 'The price quote has expired. If you already sent this amount, keep this request—we’re still watching. Otherwise create a fresh request.'
-          : 'Waiting for your gift to appear. We check about every 20 seconds while Cutout is open.'
-      } catch (error) { issue.value = error.message }
-      finally { checking.value = false }
-    }
-    async function restoreCode() {
-      if (working.value || checking.value) return
-      working.value = true; issue.value = ''
-      try {
-        if (restore.value.trim().startsWith('CUTOUTGIFT1.')) {
-          const next = decodeRequest(restore.value)
-          await localStore.put('settings', { id: 'gift-intent', intent: next })
-          intent.value = next; receipt.value = null; notice.value = 'Gift request restored. We’ll check for its payment.'
-          await renderQr()
+          if (tx.txid !== chosenId) throw new Error('Please check the transaction ID and try again.')
+          match = manualTransaction(current, tx)
+          if (!match) throw new Error('This transaction does not match a new gift to Cutout.')
         } else {
-          const value = await verifyCode(restore.value)
-          await saveSupporter(value); receipt.value = value
-          notice.value = 'Welcome back. Your supporter studio is ready on this device.'
+          const matches = matchingTransactions(current, await addressTransactions())
+          if (matches.length > 1) throw new Error('Please add your transaction ID under Payment help so we can identify your gift.')
+          match = matches[0]
         }
-        restore.value = ''
-      } catch (error) { issue.value = error.message }
-      finally { working.value = false }
-      if (intent.value) checkPayment()
+
+        if (intent.value !== current) return
+        if (match) await acceptPayment(match)
+        else if (Date.now() > current.expiresAt) {
+          notice.value = 'Already paid? We’re still watching. Otherwise, update the amount under Payment help.'
+        } else if (manual) {
+          notice.value = 'Not seen yet. We’ll keep checking while this window is open.'
+        }
+      } catch (error) {
+        issue.value = error.message
+      } finally {
+        checking.value = false
+      }
     }
-    async function copy(text, label) {
-      try { await navigator.clipboard.writeText(text); notice.value = `${label} copied.` }
-      catch { issue.value = 'Copy is unavailable here. Select the text below and copy it manually.' }
-    }
-    function saveCode() {
-      downloadBlob(new Blob([`Cutout — ${code.value.startsWith('CUTOUTGIFT1.') ? 'gift recovery' : 'supporter'} code\n\n${code.value}\n\nKeep this file. Paste the code into “Restore a code” in another Cutout installation.\nPresets and batch photos stay on their original device.\n`], { type: 'text/plain' }), 'cutout-code.txt')
-    }
-    async function saveMessage() {
-      issue.value = ''
-      if (!supporter.value || !message.value.trim()) return
+
+    async function restoreCode(input = restore.value) {
+      if (working.value || checking.value) return
       working.value = true
+      issue.value = ''
       try {
-        const draft = { id: crypto.randomUUID(), createdAt: Date.now(), text: message.value.trim().slice(0, 1000),
-          diagnostics: attachDiagnostics.value ? props.diagnostics() : null, txid: supporter.value.txid, status: 'saved-locally' }
-        await localStore.put('messages', draft); drafts.value.unshift(draft); message.value = ''; attachDiagnostics.value = false
-        notice.value = 'Message saved on this device. It has not been sent; delivery is coming later.'
-      } catch (error) { issue.value = error.message }
-      finally { working.value = false }
+        const value = await verifyCode(input.trim())
+        await saveSupporter(value)
+        receipt.value = value
+        givingAgain.value = false
+        restore.value = ''
+        notice.value = 'Welcome back. Your supporter studio is ready.'
+      } catch (error) {
+        issue.value = error.message
+      } finally {
+        working.value = false
+      }
     }
-    function downloadDraft(draft) { downloadBlob(new Blob([JSON.stringify(draft, null, 2)], { type: 'application/json' }), 'cutout-message.json') }
+
+    async function restoreFromLink() {
+      const incoming = new URLSearchParams(window.location.hash.slice(1)).get('supporter')
+      if (!incoming) return
+      restoring.value = true
+      emit('update:modelValue', true)
+      await restoreCode(incoming)
+      restoring.value = false
+      if (supporter.value) {
+        window.history.replaceState(null, '', window.location.pathname + window.location.search)
+      }
+    }
+
+    async function copy(text, label) {
+      try {
+        await navigator.clipboard.writeText(text)
+        notice.value = `${label} copied.`
+      } catch {
+        issue.value = 'Copy isn’t available. Select the text and copy it manually.'
+      }
+    }
+
+    function saveCode() {
+      if (!code.value) return
+      const text = [
+        'Cutout supporter pass',
+        '',
+        'Open this link to restore your studio on another device:',
+        restoreLink.value,
+        '',
+        'Your supporter code:',
+        code.value,
+        '',
+        'Backdrops, photos, and messages stay on their original device.',
+      ].join('\n')
+      downloadBlob(new Blob([text], { type: 'text/plain' }), 'cutout-supporter-pass.txt')
+    }
+
+    async function saveMessage() {
+      if (!hasExtras.value || !message.value.trim() || working.value) return
+      working.value = true
+      issue.value = ''
+      try {
+        const draft = {
+          id: crypto.randomUUID(),
+          createdAt: Date.now(),
+          text: message.value.trim().slice(0, 1000),
+          diagnostics: attachDiagnostics.value ? props.diagnostics() : null,
+          txid: supporter.value?.txid || null,
+          preview: !supporter.value && Boolean(props.preview),
+          status: 'saved-locally',
+        }
+        await localStore.put('messages', draft)
+        drafts.value.unshift(draft)
+        message.value = ''
+        attachDiagnostics.value = false
+        notice.value = 'Note saved on this device. Nothing has been sent yet.'
+      } catch (error) {
+        issue.value = error.message
+      } finally {
+        working.value = false
+      }
+    }
+
+    function downloadDraft(draft) {
+      downloadBlob(new Blob([JSON.stringify(draft, null, 2)], {
+        type: 'application/json',
+      }), 'cutout-message.json')
+    }
+
     async function removeDraft(id) {
-      try { await localStore.remove('messages', id); drafts.value = drafts.value.filter(draft => draft.id !== id) }
-      catch (error) { issue.value = error.message }
-    }
-    async function importFile(event) {
-      const file = event.target.files?.[0]; event.target.value = ''
-      if (!file) return
-      if (file.size > 60000) { issue.value = 'Choose a Cutout code text file smaller than 60 KB.'; return }
-      const text = await file.text(); restore.value = text.match(/CUTOUT(?:GIFT)?1\.[A-Za-z0-9_-]+/)?.[0] || text.trim()
-      await restoreCode()
-    }
-    onMounted(async () => {
       try {
-        const [saved, pending, last, messages] = await Promise.all([localStore.get('settings', 'supporter'), localStore.get('settings', 'gift-intent'), localStore.get('settings', 'last-gift'), localStore.list('messages')])
+        await localStore.remove('messages', id)
+        drafts.value = drafts.value.filter(draft => draft.id !== id)
+      } catch (error) {
+        issue.value = error.message
+      }
+    }
+
+    async function importFile(event) {
+      const file = event.target.files?.[0]
+      event.target.value = ''
+      if (!file) return
+      try {
+        if (file.size > 60000) throw new Error('Choose your saved supporter pass, up to 60 KB.')
+        const text = await file.text()
+        await restoreCode(text.match(/CUTOUT1\.[A-Za-z0-9_-]+/)?.[0] || text.trim())
+      } catch (error) {
+        issue.value = error.message
+      }
+    }
+
+    function visibilityChanged() {
+      if (opened.value && document.visibilityState === 'visible') checkPayment()
+    }
+
+    onMounted(async () => {
+      document.addEventListener('visibilitychange', visibilityChanged)
+      window.addEventListener('hashchange', restoreFromLink)
+      try {
+        const [saved, pending, last, messages] = await Promise.all([
+          localStore.get('settings', 'supporter'),
+          localStore.get('settings', 'gift-intent'),
+          localStore.get('settings', 'last-gift'),
+          localStore.list('messages'),
+        ])
         if (!alive) return
-        if (saved?.code) { const value = decodeCode(saved.code); if (isSupporter(value)) { supporter.value = value; emit('supporter', true) } }
+        if (saved?.code) {
+          const value = decodeCode(saved.code)
+          if (isSupporter(value)) {
+            supporter.value = value
+            emit('supporter', true)
+          }
+        }
+        // Keep old pending requests working, without displaying their recovery code.
         if (pending?.intent) intent.value = decodeRequest(encodeRequest(pending.intent))
-        receipt.value = last?.receipt || null; drafts.value = messages.sort((a, b) => b.createdAt - a.createdAt)
-        timer = setInterval(() => { if (intent.value) checkPayment() }, 20000)
-        if (intent.value) checkPayment()
-      } catch (error) { issue.value = error.message }
+        receipt.value = last?.receipt || null
+        drafts.value = messages.sort((a, b) => b.createdAt - a.createdAt)
+      } catch (error) {
+        issue.value = error.message
+      }
+      if (alive) restoreFromLink()
     })
-    onUnmounted(() => { alive = false; clearInterval(timer) })
-    return { dialog, qr, opened, amount, intent, receipt, supporter, working, checking, notice, issue, restore, txid, message, attachDiagnostics, drafts, persistence,
-      code, uri, address: BITCOIN_ADDRESS, btc, open, close, createRequest, checkPayment, restoreCode, saveCode, copy, saveMessage, downloadDraft, removeDraft, importFile, renderQr }
+
+    onUnmounted(() => {
+      alive = false
+      opening += 1
+      stopWatching()
+      document.removeEventListener('visibilitychange', visibilityChanged)
+      window.removeEventListener('hashchange', restoreFromLink)
+    })
+
+    return {
+      dialog, qr, opened, amount, customAmount, intent, receipt, supporter,
+      givingAgain, restoring, working, checking, notice, issue, restore, txid,
+      message, attachDiagnostics, drafts, hasExtras, showStudio, showPayment, code, uri, restoreLink,
+      address: BITCOIN_ADDRESS, btc, open, close, chooseAmount, createRequest,
+      checkPayment, restoreCode, saveCode, copy, saveMessage, downloadDraft,
+      removeDraft, importFile,
+    }
   },
+
   template: `
-    <button class="give-nav" @click="$emit('update:modelValue', true)"><span aria-hidden="true">♡</span> {{ supporter ? 'Supporter studio' : 'Give & grow' }}</button>
-    <Teleport to="body"><dialog ref="dialog" class="giving-dialog" aria-labelledby="giving-title" @cancel.prevent="close" @click="($event.target === dialog) && close()">
-      <div class="giving-inner">
-        <div class="dialog-close-wrap"><button class="dialog-close" aria-label="Close giving" autofocus @click="close">×</button></div>
-        <div class="giving-hero"><span class="section-index">A LITTLE GIFT. MORE POSSIBILITY.</span><h2 id="giving-title">Good things<br>grow <em>together.</em></h2><p>Help keep Cutout open, independent, and made with care. Give any amount in bitcoin.</p><div class="giving-benefits"><span>🎨 Saved brand backdrops</span><span>📚 Batch photo processing</span><span>💬 A little note to us</span></div><small>A gift of $10 USD or more opens your supporter studio. No subscription.</small></div>
-        <div class="giving-body">
-          <div v-if="supporter" class="supporter-welcome"><span>✳</span><div><strong>Your supporter studio is open.</strong><p>Thank you for helping this little tool grow.</p></div></div>
-          <section v-if="!intent && !receipt" class="gift-start"><h3>Choose your little contribution</h3><div class="gift-amounts"><button v-for="value in [5,10,21,50]" :aria-pressed="Number(amount) === value" :class="{ chosen: Number(amount) === value }" @click="amount = value">\${{ value }}</button></div><label class="field-label">Or choose an amount · USD<input type="number" min="1" max="10000" step="1" v-model="amount"></label><button class="button button-accent full" :disabled="working" @click="createRequest">{{ working ? 'Preparing your gift…' : 'Continue with bitcoin' }} <span>↗</span></button><p class="giving-fine">No wallet connection. You choose whether to send a payment.</p></section>
-          <section v-if="intent" class="payment-section"><div class="qr-layout"><div class="qr-card"><div ref="qr" class="gift-qr" role="img" aria-label="Bitcoin payment QR code"></div><span>SCAN A LITTLE GOOD INTO THE WORLD</span></div><div class="payment-copy"><span class="section-index">YOUR BITCOIN GIFT</span><h3>{{ btc(intent.sats) }} <small>BTC</small></h3><p>{{ intent.sats.toLocaleString() }} sats · approximately \u0024{{ (intent.sats * intent.rate / 1e8).toFixed(2) }} USD</p><a class="button button-dark full" :href="uri">Open bitcoin wallet ↗</a><button class="button button-outline full" @click="copy(btc(intent.sats), 'BTC amount')">Copy exact amount</button><p class="giving-fine">Send the exact amount shown. A few extra sats help us recognize your gift. Wallet fees are separate. Bitcoin on-chain only.</p></div></div><label class="field-label">Cutout’s bitcoin address<textarea class="address-text" :value="address" readonly rows="2" @focus="$event.target.select()"></textarea></label><button class="button button-outline full" @click="copy(address, 'Bitcoin address')">Copy bitcoin address</button><div class="payment-wait"><span class="privacy-dot"></span> {{ checking ? 'Checking for your gift…' : 'Watching for your gift' }}<button :disabled="checking || working" @click="checkPayment(true)">Check now</button></div><details class="gift-help"><summary>Already sent it, or need a fresh request?</summary><label class="field-label">Transaction ID from your wallet<input v-model="txid" spellcheck="false" autocapitalize="off" placeholder="Optional · 64 characters"></label><button class="button button-outline full" :disabled="checking || working" @click="checkPayment(true)">Check this transaction</button><p class="giving-fine">If your wallet sent a different amount, this checks its actual gift value against your saved USD quote.</p><label class="field-label">New gift amount · USD<input type="number" min="1" max="10000" v-model="amount"></label><p class="giving-fine">Keep this request if you’ve already paid. A new request uses a different amount. The USD quote is held for 30 minutes; we can still recognize the original amount later.</p><button class="text-action" :disabled="working || checking" @click="createRequest">I haven’t paid · create a fresh request</button></details></section>
-          <section v-if="receipt && !intent" class="gift-thanks"><div class="thank-mark">♡</div><h3>A little gift. A big thank you.</h3><p>{{ supporter ? 'Your saved backdrops, batch workspace, and message notebook are ready.' : 'Every contribution helps keep this project growing.' }}</p><a :href="'https://mempool.space/tx/' + receipt.txid" target="_blank" rel="noopener noreferrer">View gift on mempool.space ↗</a><button class="button button-outline full" :disabled="working" @click="receipt = null">Give again</button></section>
-          <section v-if="code" class="code-card"><div><span class="section-index">{{ code.startsWith('CUTOUTGIFT1.') ? 'YOUR GIFT RECOVERY CODE' : 'YOUR SUPPORTER CODE' }}</span><h3>Keep your little key.</h3><p>{{ code.startsWith('CUTOUTGIFT1.') ? 'Save this before you leave. It restores this gift request on another device; the studio opens when the gift is seen.' : 'Save your code to open the supporter studio in another Cutout installation.' }}</p></div><textarea :value="code" aria-label="Portable Cutout code" readonly rows="3" @focus="$event.target.select()"></textarea><div class="inline-actions"><button class="button button-dark" @click="saveCode">Save code ↓</button><button class="button button-outline" @click="copy(code, 'Code')">Copy code</button></div><small>Saved in this browser. Keep a backup: clearing site data can remove it. Backdrops and batch photos stay on this device.</small></section>
-          <details class="gift-help"><summary>Restore a code</summary><label class="field-label">Paste a supporter or gift recovery code<textarea v-model="restore" rows="3" spellcheck="false" autocapitalize="off" placeholder="CUTOUT1.…"></textarea></label><button class="button button-outline full" :disabled="working || checking || !restore.trim()" @click="restoreCode">{{ working ? 'Checking code…' : 'Restore my studio' }}</button><label class="file-import">Or choose your saved code file<input type="file" accept=".txt,text/plain" @change="importFile"></label><p class="giving-fine">Restoring on another device needs a connection to check the gift.</p></details>
-          <section v-if="supporter" class="message-notebook"><span class="section-index">A NOTE FROM YOU 💬</span><h3>What’s on your mind?</h3><p>A thought, a thank-you, or something we can improve.</p><label class="field-label">Your message<textarea v-model="message" maxlength="1000" rows="4" placeholder="A little note…"></textarea></label><label class="wasm-option"><input type="checkbox" v-model="attachDiagnostics"> Include this session’s diagnostics</label><details v-if="attachDiagnostics" class="gift-help"><summary>Review attached diagnostics</summary><pre>{{ diagnostics() }}</pre></details><button class="button button-accent full" :disabled="working || !message.trim()" @click="saveMessage">Save message on this device</button><p class="giving-fine">Local notebook for now. Nothing is sent yet; message delivery is coming later.</p><ul class="draft-list"><li v-for="draft in drafts" :key="draft.id"><p>{{ draft.text }}</p><small>{{ new Date(draft.createdAt).toLocaleDateString() }} · Saved locally{{ draft.diagnostics ? ' · Diagnostics included' : '' }}</small><div class="inline-actions"><button class="text-action" @click="downloadDraft(draft)">Download note ↓</button><button class="text-action" @click="removeDraft(draft.id)">Delete</button></div></li></ul></section>
-          <p v-if="notice" class="gift-notice" role="status">{{ notice }}</p><p v-if="issue" class="error-text" role="alert">{{ issue }}</p><p class="giving-fine">We recognize your gift when it appears on mempool.space, before a block confirmation. Prices and payment checks contact mempool.space; your photos and messages stay here.</p>
+    <button
+      class="inline-flex min-h-11 items-center gap-2 rounded-full border border-[#dfc7b8] bg-[#f4e8dc] px-4 text-xs font-semibold text-[#86472f]"
+      @click="$emit('update:modelValue', true)"
+    >
+      <span class="text-xl" aria-hidden="true">♡</span>
+      {{ preview ? 'Preview studio' : supporter ? 'Your studio' : 'Support Cutout' }}
+    </button>
+
+    <Teleport to="body">
+      <dialog
+        ref="dialog"
+        class="support-dialog rounded-3xl bg-white text-forest shadow-2xl"
+        aria-labelledby="giving-title"
+        @cancel.prevent="close"
+        @click="($event.target === dialog) && close()"
+      >
+        <div class="sticky top-0 z-10 h-0">
+          <button
+            class="absolute top-3 right-3 grid size-11 place-items-center rounded-full bg-[#f4f5f1] text-2xl text-[#5c6e61] hover:bg-[#e9ede5]"
+            aria-label="Close giving"
+            autofocus
+            @click="close"
+          >×</button>
         </div>
-      </div>
-    </dialog></Teleport>`,
+
+        <div class="px-6 pt-8 pb-6 sm:px-8 sm:pt-9 sm:pb-8">
+          <header class="pr-10">
+            <span v-if="!showPayment && !restoring" class="mb-4 grid size-11 place-items-center rounded-2xl bg-[#f6e9df] text-2xl text-clay" aria-hidden="true">♡</span>
+            <h2 id="giving-title" class="m-0 text-[28px] leading-tight font-semibold tracking-tight">
+              {{ restoring ? 'Opening your studio' : showStudio ? 'Your supporter studio' : showPayment ? 'Give with bitcoin' : 'Keep Cutout growing' }}
+            </h2>
+            <p class="mt-3 mb-0 text-sm leading-relaxed text-muted">
+              {{ restoring ? 'Checking your saved gift…' : showStudio ? 'A few extras, with our thanks.' : showPayment ? 'Scan with your wallet, or open it on this device.' : 'A one-time gift of $10 or more helps keep this little tool open and independent.' }}
+            </p>
+          </header>
+
+          <p v-if="preview" class="mt-4 rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-800">
+            Testing extras · No gift recorded.
+          </p>
+
+          <div v-if="restoring" class="grid place-items-center py-12" role="status" aria-label="Restoring supporter pass"><span class="size-6 animate-spin rounded-full border-2 border-line border-t-clay"></span></div>
+
+          <section v-if="!showPayment && !showStudio && !restoring" class="mt-6" aria-label="Choose a gift">
+            <ul class="m-0 grid list-none gap-3 p-0 text-sm text-[#52694f]">
+              <li class="flex items-center gap-3"><span aria-hidden="true">🎨</span> Save your own backdrops</li>
+              <li class="flex items-center gap-3"><span aria-hidden="true">📚</span> Process a batch of photos</li>
+              <li class="flex items-center gap-3"><span aria-hidden="true">💬</span> Leave a note with diagnostics</li>
+            </ul>
+
+            <div class="mt-6 grid grid-cols-4 gap-2" role="group" aria-label="Gift amount">
+              <button
+                v-for="value in [10, 21, 50, 'other']"
+                :key="value"
+                class="min-h-12 rounded-xl border text-sm font-semibold"
+                :class="(!customAmount && Number(amount) === value) || (customAmount && value === 'other') ? 'border-forest bg-forest text-white' : 'border-line bg-white text-[#5b725f]'"
+                :aria-pressed="(!customAmount && Number(amount) === value) || (customAmount && value === 'other')"
+                :disabled="working"
+                @click="chooseAmount(value)"
+              >{{ value === 'other' ? 'Other' : '$' + value }}</button>
+            </div>
+
+            <label v-if="customAmount" class="mt-4 block text-xs font-medium text-[#60715f]">
+              Gift amount · USD
+              <input
+                v-model="amount"
+                type="number"
+                min="10"
+                max="10000"
+                step="1"
+                class="mt-2 block min-h-12 w-full rounded-xl border border-line bg-white px-4 text-base text-forest"
+              >
+            </label>
+
+            <button
+              class="mt-5 flex min-h-12 w-full items-center justify-center rounded-xl bg-clay px-4 text-sm font-semibold text-white disabled:opacity-50"
+              :disabled="working"
+              @click="createRequest"
+            >{{ working ? 'Preparing…' : 'Continue with bitcoin' }}</button>
+            <p class="mt-3 mb-0 text-center text-xs text-[#85917e]">No subscription. Your photos stay private.</p>
+          </section>
+
+          <section v-if="showPayment" class="mt-5" aria-label="Bitcoin payment">
+            <div class="mx-auto w-52 max-w-full sm:w-60 rounded-2xl border border-[#edf0e7] bg-white">
+              <div
+                ref="qr"
+                class="aspect-square [&_svg]:block [&_svg]:h-auto [&_svg]:max-w-full"
+                role="img"
+                aria-label="Bitcoin payment QR code"
+              ></div>
+            </div>
+            <div class="mt-4 text-center">
+              <button
+                class="min-h-11 rounded-lg px-2 text-xl font-semibold tracking-tight"
+                aria-label="Copy exact bitcoin amount"
+                @click="copy(btc(intent.sats), 'BTC amount')"
+              >{{ btc(intent.sats) }} <span class="text-xs font-medium text-[#85917e]">BTC ⧉</span></button>
+              <p class="mt-1 mb-0 text-xs text-muted">
+                {{ intent.sats.toLocaleString() }} sats · About \${{ (intent.sats * intent.rate / 1e8).toFixed(2) }} USD
+              </p>
+            </div>
+            <a
+              class="mt-5 flex min-h-12 items-center justify-center rounded-xl bg-forest px-4 text-sm font-semibold text-white no-underline"
+              :href="uri"
+            >Open bitcoin wallet</a>
+            <button
+              class="mt-2 min-h-12 w-full rounded-xl border border-line bg-white px-4 text-sm font-semibold"
+              @click="copy(address, 'Bitcoin address')"
+            >Copy bitcoin address</button>
+            <p class="mt-3 mb-0 text-center text-xs leading-relaxed text-[#85917e]">
+              Send the exact amount shown. Network fees are separate.<br>Bitcoin on-chain only.
+            </p>
+            <div class="mt-5 flex items-center gap-2 text-xs text-[#60745a]" role="status">
+              <span class="size-1.5 rounded-full bg-[#73a480]"></span>
+              {{ checking ? 'Checking your gift…' : 'Waiting for your gift' }}
+              <button class="ml-auto min-h-11 px-2 font-semibold text-clay" :disabled="checking || working" @click="checkPayment(true)">Check now</button>
+            </div>
+
+            <details class="mt-2 border-t border-[#edf0e7] pt-4 text-xs">
+              <summary class="min-h-8 cursor-pointer font-medium text-muted">Payment help</summary>
+              <label class="mt-3 block text-muted">
+                Bitcoin address
+                <textarea :value="address" readonly rows="2" class="mt-2 w-full resize-none rounded-lg border border-line p-3 font-mono text-[11px] break-all" @focus="$event.target.select()"></textarea>
+              </label>
+              <label class="mt-4 block text-muted">
+                Transaction ID from your wallet
+                <input v-model="txid" spellcheck="false" autocapitalize="off" class="mt-2 min-h-11 w-full rounded-lg border border-line px-3 text-xs" placeholder="Optional · 64 characters">
+              </label>
+              <button class="mt-2 min-h-11 font-semibold text-clay" :disabled="checking || working" @click="checkPayment(true)">Check transaction</button>
+              <p class="my-3 leading-relaxed text-[#85917e]">Your wallet changed the amount? Add its transaction ID above. We’ll check the actual gift.</p>
+              <label class="block text-muted">New gift amount · USD
+                <input v-model="amount" type="number" min="10" max="10000" class="mt-2 min-h-11 w-full rounded-lg border border-line px-3">
+              </label>
+              <button class="mt-2 min-h-11 font-semibold text-clay" :disabled="checking || working" @click="createRequest">I haven’t paid · update amount</button>
+              <p class="mb-0 leading-relaxed text-[#85917e]">Already paid? Keep this request. The price is held for 30 minutes; a delayed gift can still be recognized.</p>
+            </details>
+          </section>
+
+          <section v-if="showStudio" class="mt-6" aria-label="Supporter notebook">
+            <p v-if="supporter" class="m-0 rounded-xl bg-sage px-4 py-3 text-sm text-sage-ink">Thank you. Your extras are ready in the workspace.</p>
+            <label class="mt-5 block text-sm font-medium">Leave a note
+              <textarea v-model="message" maxlength="1000" rows="3" placeholder="A thought, a thank-you, or an idea…" class="mt-2 block w-full rounded-xl border border-line bg-white p-3 text-sm font-normal leading-relaxed"></textarea>
+            </label>
+            <label class="mt-3 flex min-h-11 items-center gap-2 text-xs text-muted">
+              <input v-model="attachDiagnostics" type="checkbox" class="size-4 accent-forest"> Include diagnostics
+            </label>
+            <details v-if="attachDiagnostics" class="mt-2 text-xs text-muted">
+              <summary class="min-h-8 cursor-pointer">Review diagnostics</summary>
+              <pre class="max-h-40 overflow-auto rounded-lg bg-paper p-3 text-[10px] whitespace-pre-wrap">{{ diagnostics() }}</pre>
+            </details>
+            <button class="mt-3 min-h-12 w-full rounded-xl bg-forest px-4 text-sm font-semibold text-white disabled:opacity-50" :disabled="working || !message.trim()" @click="saveMessage">Save note</button>
+            <p class="mt-3 mb-0 text-xs leading-relaxed text-[#85917e]">Saved on this device. Message delivery is coming later.</p>
+            <details v-if="drafts.length" class="mt-5 border-t border-[#edf0e7] pt-4 text-xs">
+              <summary class="min-h-8 cursor-pointer font-medium text-muted">Saved notes · {{ drafts.length }}</summary>
+              <ul class="m-0 list-none p-0">
+                <li v-for="draft in drafts" :key="draft.id" class="mt-3 rounded-xl bg-paper p-3">
+                  <p class="m-0 text-xs leading-relaxed break-words whitespace-pre-wrap">{{ draft.text }}</p>
+                  <p class="mt-2 mb-0 text-[10px] text-[#85917e]">{{ new Date(draft.createdAt).toLocaleDateString() }} · Local{{ draft.preview ? ' · Test note' : '' }}</p>
+                  <div class="flex gap-4">
+                    <button class="min-h-11 font-semibold text-clay" @click="downloadDraft(draft)">Download</button>
+                    <button class="min-h-11 text-muted" @click="removeDraft(draft.id)">Delete</button>
+                  </div>
+                </li>
+              </ul>
+            </details>
+          </section>
+
+          <details v-if="supporter" class="mt-6 border-t border-[#edf0e7] pt-4 text-xs" aria-label="Supporter pass">
+            <summary class="min-h-8 cursor-pointer font-medium text-muted">Your supporter pass</summary>
+            <p class="my-3 leading-relaxed text-[#85917e]">Keep a backup to open your studio on another device. Your upgrade is already saved here.</p>
+            <div class="grid grid-cols-2 gap-2">
+              <button class="min-h-11 rounded-xl bg-sage px-3 font-semibold" @click="saveCode">Save pass ↓</button>
+              <button class="min-h-11 rounded-xl border border-line px-3 font-semibold" @click="copy(restoreLink, 'Restore link')">Copy restore link</button>
+            </div>
+            <label class="mt-4 block text-muted">Supporter code
+              <textarea :value="code" aria-label="Portable Cutout code" readonly rows="3" class="mt-2 w-full rounded-lg border border-line p-3 font-mono text-[10px] break-all" @focus="$event.target.select()"></textarea>
+            </label>
+            <button class="min-h-11 font-semibold text-clay" @click="copy(code, 'Code')">Copy code</button>
+            <details class="mt-3">
+              <summary class="min-h-8 cursor-pointer text-muted">Restore another pass</summary>
+              <textarea v-model="restore" aria-label="Supporter code to restore" rows="3" spellcheck="false" class="mt-2 w-full rounded-lg border border-line p-3 font-mono text-[10px]"></textarea>
+              <button class="min-h-11 font-semibold text-clay" :disabled="working || checking || !restore.trim()" @click="restoreCode()">Restore pass</button>
+              <label class="mt-2 block text-muted">Or choose a saved pass<input type="file" accept=".txt,text/plain" class="mt-2 block w-full min-h-11 text-xs" @change="importFile"></label>
+            </details>
+          </details>
+
+          <button v-if="showStudio" class="mt-5 min-h-11 w-full text-xs font-semibold text-clay" @click="givingAgain = true">Give again</button>
+          <button v-if="givingAgain && hasExtras && !showPayment" class="mt-2 min-h-11 w-full text-xs text-muted" @click="givingAgain = false">Back to my studio</button>
+          <p v-if="notice" class="mt-4 mb-0 rounded-xl bg-sage px-3 py-2 text-xs leading-relaxed text-sage-ink" role="status">{{ notice }}</p>
+          <p v-if="issue" class="mt-4 mb-0 rounded-xl bg-red-50 px-3 py-2 text-xs leading-relaxed text-red-800" role="alert">{{ issue }}</p>
+          <p v-if="showPayment" class="mt-3 mb-0 text-center text-[10px] leading-relaxed text-[#85917e]">Your extras open automatically when we see your gift.</p>
+        </div>
+      </dialog>
+    </Teleport>
+  `,
 }

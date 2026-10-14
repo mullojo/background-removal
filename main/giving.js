@@ -17,7 +17,7 @@ export async function addressTransactions(fetcher = fetch) {
   return [...new Map(results.flat().map(tx => [tx.txid, tx])).values()]
 }
 export async function createGiftIntent(usd, fetcher = fetch, now = Date.now(), random = crypto.getRandomValues(new Uint32Array(1))[0]) {
-  if (!Number.isFinite(usd) || usd < 1 || usd > 10000) throw new Error('Choose a gift between $1 and $10,000.')
+  if (!Number.isFinite(usd) || usd < 10 || usd > 10000) throw new Error('Choose a gift between $10 and $10,000.')
   const [prices, baseline] = await Promise.all([apiJson('/v1/prices', fetcher), addressTransactions(fetcher)])
   if (!Number.isFinite(prices.USD) || prices.USD <= 0 || !Number.isFinite(prices.time) || Math.abs(now / 1000 - prices.time) > 3600) throw new Error('A fresh Bitcoin price is unavailable. Please try again shortly.')
   const sats = Math.ceil(usd * 100000000 / prices.USD) + 1 + (random % 99)

@@ -150,3 +150,11 @@ Fixed the giving prompts to use shared Vue open/close state rather than an
 imperative component reference. Verified all four entry points, phone reopening,
 Escape dismissal, and the PWA update guard. Human-time allocation remains pending
 review; this follow-up is not an additional counted block yet.
+
+### Follow-up · v1.2.0
+
+Simplified the giving flow around a $10 minimum, moved pass/recovery controls
+after gift recognition, and rebuilt the touched controls with readable Tailwind
+markup. Reduced modal opening work and added a removable, session-only developer
+preview for testing extras without a gift. Human hours are still pending review;
+these milestones do not automatically add counted VBs.

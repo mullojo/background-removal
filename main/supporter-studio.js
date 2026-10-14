@@ -42,8 +42,13 @@ export function useSupporterStudio({ processFile, clearPhoto, getOutput, isBusy,
     try { await Promise.all([refreshPresets(), refreshOutputs()]) }
     catch (error) { storageNotice.value = error.message }
   }
-  async function setSupporter(value) {
+  async function setSupporter(value, { preview = false } = {}) {
     supporter.value = value
+    if (preview) {
+      storageNotice.value = 'Testing extras in this tab. No gift or supporter code has been created.'
+      return
+    }
+    if (!value) storageNotice.value = ''
     if (value) {
       try {
         const durable = await requestPersistence()

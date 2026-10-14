@@ -20,6 +20,8 @@ support either layout. Use HTTP for localhost testing, HTTPS for public installs
 | `main/style.css` | Colors, typography, spacing, responsive layout, header mark |
 | `main/app.js` | Backdrop choices, image handling, export behavior |
 | `main/giving.js` | Bitcoin recipient address, quote provider, matching, and portable receipt format |
+| `main/qr-loader.js` | Lazy QR runtime and work after first paint |
+| `main/developer-preview.js` | Temporary session-only preview; remove after testing |
 | `main/giving-ui.js` | Giving dialog, supporter benefits, local message notebook |
 | `main/supporter-studio.js` | Saved backdrops, batch limits, local output shelf |
 | `main/local-store.js` | IndexedDB name/schema and download helper |
@@ -37,6 +39,10 @@ export square PNGs at 192, 512, and 180 pixels. The maskable 512-pixel icon need
 its essential artwork within the central safe circle (radius 40% of the canvas).
 Keep the icon background opaque for Apple/maskable use. Replace all exports along
 with the SVG. The header mark currently uses matching CSS shapes in `style.css`.
+
+The revised giving and supporter controls use Tailwind utilities and the small
+`@theme` palette in `main/index.html`. Native dialog sizing/backdrop and older
+editor styles remain in `main/style.css`.
 
 A separately branded app should get its own manifest identity, diagnostics storage
 key, IndexedDB database name, and shell-cache prefix. Set its intended Bitcoin

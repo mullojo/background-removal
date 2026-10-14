@@ -117,3 +117,16 @@ Preserve single-use workers and commit each batch output before releasing the
 current photo. Gift simulations belong only in isolated test previews.
 The value-block journal records this milestone with human hours still pending
 review; do not count unattended AI runtime as human contribution.
+
+
+## v1.2.0 · simpler giving and temporary preview
+
+Giving starts at $10. Pass controls appear only after gift recognition; saved
+restore links verify before granting access. The modal opens before lazy QR/API
+work and polls only while its payment screen is visible. New giving/batch/preset
+markup uses Tailwind utilities and the HTML theme palette.
+The user explicitly requested a removable hidden preview: seven version taps
+reveal a checkbox in Help & diagnostics. `developer-preview.js` stores the flag
+in sessionStorage only. Do not treat it as a real gift or issue a test receipt.
+It unlocks presets, batches, and notes for testing, preserving genuine upgrades
+when switched off. See GIVING.md for removal instructions and current behavior.

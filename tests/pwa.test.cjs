@@ -214,6 +214,7 @@ test('offline uploads wait for connectivity and model readiness; worker failures
     createImageBitmap: async () => { decodes++; throw Error('Synthetic decode failure') },
     createApp: options => ({ mount() { app = options.setup(); mounted.forEach(fn => fn()) } }),
   })
+  vm.runInContext(fs.readFileSync(path.join(root, 'main/developer-preview.js'), 'utf8').replace(/^import .*\n/gm, '').replaceAll('export ', ''), context)
   vm.runInContext(fs.readFileSync(path.join(root, 'main/supporter-studio.js'), 'utf8').replace(/^import .*\n/gm, '').replaceAll('export ', ''), context)
   vm.runInContext(source, context)
   assert.equal(workers.length, 0)
@@ -223,6 +224,14 @@ test('offline uploads wait for connectivity and model readiness; worker failures
   assert.equal(pwaHooks.isBusy(), true, 'Giving dialog must defer automatic reloads')
   app.givingOpen.value = false
   assert.equal(pwaHooks.isBusy(), false)
+  app.setPreviewSupporter(true)
+  assert.equal(app.supporter.value, true)
+  assert.equal(localRecords.settings.size, 0, 'Preview must not create a real receipt')
+  app.updateSupporter(true)
+  app.setPreviewSupporter(false)
+  assert.equal(app.supporter.value, true, 'Disabling preview preserves real supporter access')
+  app.updateSupporter(false)
+  assert.equal(app.supporter.value, false)
   await app.acceptFile({ name: 'local.png', type: 'image/png', size: 100 })
   assert.equal(decodes, 0)
   assert.equal(workers.length, 0)

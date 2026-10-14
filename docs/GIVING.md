@@ -1,21 +1,61 @@
 # Giving & the supporter studio
 
-Cutout v1.1.0 adds a local-first, gift-supported studio. The regular single-photo
-workflow remains freely available. A gift of **$10 USD or more** opens saved brand
-backdrops, batch processing, and the message notebook. There is no subscription
-or remote account service.
+Cutout is an open source, gift-supported photo studio. The regular single-photo
+workflow stays free. A one-time bitcoin gift of **$10 USD or more** opens saved
+backdrops, batch processing, and a local notebook. There is no subscription.
 
-![Cutout’s giving dialog on a laptop-sized viewport](images/cutout-giving-desktop.png)
+## A simpler flow · v1.2.0
 
-[Phone payment preview](images/cutout-giving-phone.png). Screenshots illustrate
-the interface; create your own current payment request in the app before giving.
+1. Open **Support Cutout**. Choose **$10**, **$21**, **$50**, or **Other** ($10 minimum).
+2. Continue, then scan the QR or choose **Open bitcoin wallet**. The address and
+   exact amount can also be copied. Cutout recognizes the gift automatically.
+3. The supporter studio opens with a thank-you and a place to save a note.
+   **Your supporter pass** becomes available only after the gift is recognized.
 
-## Give a little bitcoin
+The amount screen and payment screen contain no supporter code or restore form.
+Pending requests stay in IndexedDB, so reopening Cutout on the same browser
+resumes the request. An older saved request still works at its original amount.
 
-Use **Give & grow** in the header or the giving card below the workspace.
-Choose $5, $10, $21, $50, or a custom USD amount. The app reads a current BTC/USD
-quote from mempool.space, creates a payment request, and saves it before showing
-its QR code. QR Code Styling 1.9.2 is bundled locally with its license notices.
+### Keep your supporter pass
+
+After a qualifying gift, expand **Your supporter pass** to save a text file,
+copy a restore link, or copy the underlying `CUTOUT1.…` code. The upgrade is
+already stored in IndexedDB; this backup is for another device or cleared storage.
+
+Opening the restore link on another device verifies its referenced transaction
+before enabling the extras or showing any pass controls. The code is carried in
+an URL fragment, which is not sent to the static host. The saved file includes
+both that link and the code. Existing code-only backups can be restored by
+opening the app URL with `#supporter=CUTOUT1.…` appended. A supporter who already
+has access can also import another saved pass from the pass details.
+
+Presets, notes, and batch outputs stay on the original browser/origin. The pass
+restores access, not those local files. Keep backups: persistent storage is
+requested after a real upgrade, but browsers can deny it or clear site data.
+
+## Temporary developer preview
+
+Requested for testing the extras without sending bitcoin:
+
+1. Tap/click the small **app version below “cutout.” seven times**. Taps must be
+   within five seconds of the previous tap.
+2. Open **Help & diagnostics**, which expands to reveal **Temporary developer
+   preview**. Enable **Preview supporter features**.
+3. Test backdrops, batches, and the notebook. Turn the checkbox off when finished.
+
+The switch uses this tab's **sessionStorage**, survives reloads in the tab, and
+is separate from real supporter data. It creates no payment, gift receipt, or
+supporter code. Test notes are marked as previews. It cannot be toggled during
+an active image operation or batch. Disabling it preserves genuine supporter
+access and retains test files locally; custom swatches are hidden when neither
+real access nor preview access is active.
+
+This is a temporary, user-requested convenience, not access control. To remove it
+later: remove `main/developer-preview.js`, its app/import/template wiring, and its
+service-worker entry; remove the `preview` prop and test-note path from the giving
+component. Keep genuine gift/restore behavior and the ordinary diagnostic tools.
+
+## Payment behavior
 
 Cutout’s mainnet, on-chain Bitcoin address:
 
@@ -23,161 +63,93 @@ Cutout’s mainnet, on-chain Bitcoin address:
 bc1q4009vd4j005r5hk5mlry29xu8j6yatv9k0mgp6fstl974zue04dq9e6zlx
 ```
 
-Scan the styled QR, open the wallet link, or copy the address **and exact BTC
-amount**. The QR and wallet link contain a BIP21 URI with that address and amount.
-A random 1–99 sats are added to the rounded-up requested value to help distinguish
-requests sharing the same address. The displayed USD estimate includes those
-extra sats; wallet fees are separate. This flow supports on-chain Bitcoin, not
-Lightning invoices. The app never connects to a wallet or sends a payment itself.
+The app reads a current BTC/USD quote and an address transaction baseline from
+mempool.space. It saves the request before showing a QR. The QR and wallet link
+use a BIP21 URI with that address and amount. QR Code Styling 1.9.2 is bundled
+with license notices and loaded only when the payment screen needs it.
 
-The app checks address transactions approximately every 20 seconds while visible
-and supports a manual check. It accepts a matching **unconfirmed mempool payment**
-or a newly confirmed payment. Existing transaction IDs captured when preparing
-that request are excluded, and old confirmed transactions are rejected by block
-time. Outputs to the configured address must total the exact requested sats.
-If multiple transactions match, the donor must supply their transaction ID.
-A transaction ID can also recover a gift no longer on the latest address page
-or one whose amount was changed by the wallet. For an explicitly entered ID,
-the recipient, baseline, and time checks still apply, but the actual amount is
-used to calculate supporter eligibility against the request’s saved USD quote.
+A random 1–99 sats are added to the rounded-up gift value to help distinguish
+requests sharing one address. The shown USD estimate includes those extra sats;
+wallet fees are separate. This supports on-chain Bitcoin, not Lightning. Cutout
+never connects to a wallet or sends a payment itself.
 
-The USD quote is fixed when the request is created and expires for new sending
-after 30 minutes. Matching continues afterward so a delayed payment can still be
-recognized at the original quoted value. If you have already sent bitcoin, keep
-that request. A fresh request uses a new amount. Smaller gifts are thanked but
-do not open the $10 supporter features; separate small gifts are not accumulated
-in this initial version.
+Automatic checks run approximately every 20 seconds **while the giving payment
+screen is open and the page is visible**. Closing it stops polling. Opening it
+again or returning from a wallet resumes checks. A matching unconfirmed mempool
+transaction is sufficient; a newly confirmed transaction also qualifies.
+Existing transaction IDs in the request's baseline are excluded, and old
+confirmed transactions are rejected by block time. The automatic matcher
+requires outputs to Cutout to total the exact requested sats.
 
-Network errors, stale prices, API throttling, and missing IndexedDB prevent a new
-request from being presented as ready. Closing the dialog does not discard it.
-Reloading resumes an outstanding request. Phone/PWA suspension pauses checks;
-checks resume while the app is visible again.
+**Payment help** holds less common actions. If multiple payments match, enter
+the wallet's transaction ID. A direct ID also recovers a payment no longer on the
+latest address page or one whose wallet changed the amount. The recipient,
+baseline, and time checks still apply; its actual value determines eligibility
+against the saved USD quote. Smaller legacy gifts are thanked without granting
+the $10 extras. Separate small gifts are not accumulated in this version.
 
-## Keep your little key
+Quotes are held for 30 minutes for new sending. An already sent payment can
+still be recognized afterward at its original quoted value. If already paid,
+keep the request; creating a new request changes the amount. Stale prices,
+network/API errors, throttling, and unavailable storage produce an actionable
+error rather than presenting an unprepared request as ready.
 
-Before payment, **Save code** downloads a `CUTOUTGIFT1.…` gift recovery code. It
-restores that pending request in another installation, including the amount and
-baseline transaction IDs. Save it before paying if you may switch devices.
+### Honor-system limits
 
-After a qualifying payment is seen, the app generates a `CUTOUT1.…` supporter
-code, stores it in IndexedDB, and offers copying and a text-file download. Open
-**Restore a code** elsewhere and paste the code or choose its saved text file.
-A new installation checks the referenced transaction and recipient/amount with
-mempool.space before saving the local upgrade. Once stored, the upgrade opens
-without needing to re-enter the code or recheck the network each launch.
+Passes are portable, shareable, **unsigned receipts**, not secure licenses or
+proof of payer identity. Their client-side quote information can be altered.
+One shared public address also permits amount collisions and claims against
+public transactions. Baselines, distinctive amounts, and API verification reduce
+accidental matches; they cannot establish ownership. Reliable attribution or
+license enforcement would require a separate invoice/receipt service.
 
-Codes are intentionally portable and shareable. **They are unsigned honor-system
-receipts, not secure licenses or proof that the person presenting them paid.**
-Their quote information is client-side and can be altered. With one public static
-address, two requests can occasionally collide on an amount, and public payments
-can be claimed by someone else. Baseline snapshots, distinctive amounts, and
-transaction checks reduce accidental matches; they cannot establish ownership.
-A future service with unique invoices/addresses and signed receipts would be
-needed for reliable attribution or enforcement.
+Mempool recognition is provisional. A payment can later be replaced or dropped.
+This build honors a granted local upgrade rather than revoking it. Restoring a
+pass whose transaction is no longer available fails until a valid receipt is used.
 
-Mempool recognition is provisional, not a block confirmation. A transaction can
-be replaced or dropped later. This initial build honors the local upgrade once
-given; it does not revoke it. Restoring a code whose transaction is no longer
-available will fail until a matching valid receipt is used.
+## Backdrops, batches, and notes
 
-The app requests persistent browser storage after an upgrade, but browsers can
-still deny persistence or clear site data. Keep a backup of the code. Presets,
-messages, and saved outputs remain on their original browser/origin; a supporter
-code restores the upgrade, not those files.
+- **Saved backdrops:** up to 20 named colors, two-color gradients, or images.
+  Images accept files up to 10 MB, are saved as JPEGs at up to 1600 px, and fill
+  the photo using a centered crop. Foreground exports retain original dimensions.
+- **Batch processing:** up to 20 photos, at most 40 MB each and 200 MB total input.
+  One inference runs at a time. Each model worker is released before full-size
+  export, and each PNG commits to IndexedDB before its photo is cleared.
+- **Output shelf:** up to 100 outputs or 200 MB. Download individually, then remove
+  shelf copies explicitly. Downloads do not delete them automatically. There is
+  no ZIP export. Storage failures pause with the current export still available.
+- **Pause after this photo:** stores the current result, then stops. An inference
+  error also pauses; use the normal WASM retry. Queued source files are in memory,
+  so choose remaining files again after a reload or interrupted batch.
+- **Notebook:** up to 1,000 characters per note, with optional reviewed diagnostics.
+  Notes can be exported as JSON or deleted. They are **saved locally, not sent**.
+  Future email delivery needs a service; no API secret is included in the app.
 
-## Saved brand backdrops 🎨
+The `cutout-local` IndexedDB database uses `settings`, `presets`, `outputs`, and
+`messages` stores. Clearing the model cache or updating the PWA shell preserves
+these stores. Photo inference stays in the browser. Giving contacts mempool.space
+for public address/transaction lookups and quotes; notes, diagnostics, presets,
+and outputs are not uploaded.
 
-Expand **Your saved brand backdrops** in Finish. Name a solid color, a two-color
-gradient, or an image and save it. Saved choices appear alongside the built-in
-swatches and survive reloads. Up to 20 presets are supported.
+## Performance and verification
 
-Backdrop images accept files up to 10 MB, are resized to at most 1600 px, and are
-stored as JPEGs. They fill the photo with a centered crop, matching the preview
-and full-size PNG composition. The original foreground export retains its full
-photo dimensions. Remove unused presets from the saved list.
+The modal opens synchronously through its native dialog API. Expensive backdrop
+blur was removed. QR loading, rendering, and payment checks run after the first
+paint; an unchanged QR is reused on reopening. Model preloading still runs
+independently, preserving the mobile processing fixes. Fresh price/payment
+requests can take network time after **Continue**, but do not delay opening.
 
-## Batch workspace 📚
+An isolated local preview measured approximately **2.4 ms to native opening** and
+**29.1 ms to the measured paint point** in one run. This is not an iPhone benchmark.
+The timing instrumentation exists only in the temporary preview, not the app.
 
-Choose a backdrop first, then **Choose a batch of photos** below the canvas.
-Select up to 20 image files, at most 40 MB each and 200 MB total input. Cutout
-processes one photo at a time through the existing pipeline. Every inference
-gets a fresh worker, and its model runtime is released before full-size export.
-Each PNG must successfully commit to IndexedDB before that photo is cleared.
-
-The local output shelf holds up to 100 outputs or 200 MB. Download images
-individually, then explicitly remove their shelf copies when finished. Downloading
-does not delete a copy automatically: browsers cannot reliably tell us that a
-file reached its destination. There is no ZIP export in this first version.
-
-**Pause after this photo** finishes and stores the current output, then stops.
-An inference failure pauses the batch; use the normal WASM retry on the current
-photo. Storage failure also pauses with the current export retained in the
-workspace, so it can be downloaded directly. Already saved outputs remain on the
-shelf. Choose any remaining source files again to continue; the source queue is
-in memory and is not resumed across reloads. Keep the app open while processing.
-
-## Message notebook 💬
-
-Supporters can save a short message (up to 1,000 characters), optionally including
-the current diagnostics report. The attachment can be reviewed before saving.
-Photos and filenames are excluded by the diagnostics system.
-
-Messages are marked **saved locally**, can be downloaded as JSON, and can be
-deleted. **Nothing is sent to the project owner yet.** Future delivery, possibly
-through Plunk, needs a separate service. No API secret belongs in this browser
-app. The saved record already includes a creation time, text, optional diagnostic
-report, transaction reference, and delivery status for a future adapter.
-
-## Storage, privacy, and updates
-
-The `cutout-local` IndexedDB database has `settings`, `presets`, `outputs`, and
-`messages` stores. Gift requests, receipts, and supporter codes use `settings`.
-Clearing the **model cache** does not clear this database. PWA shell upgrades
-also preserve it. Photo inference retains its existing browser-only behavior.
-
-Giving sends public address/transaction lookups and reads a USD price from
-mempool.space. Photo processing separately uses the existing model/runtime
-providers. Message text, diagnostics, presets, and output photos are not uploaded.
-PWA updates wait while the giving dialog is open, a preset is saving, a batch is
-running, or the normal image session is active.
-
-## Verification before publishing
-
-Run the release check and Node tests. Tests cover quote freshness, payment
-matching, malformed/under-threshold codes, receipt lookup, batch limits, storage
-failure, centered image crops, offline shell assets, safe updates, and fresh
-worker disposal across batch photos. Simulated payment browser checks must run
-in an isolated preview; never add a fake payment or development unlock to `main/`.
-
-Also test on an actual iPhone/PWA: scan with a separate wallet, save/restore the
-code, process several real photos in a batch, download outputs, and reopen the
-app. Automated desktop/browser checks do not establish iPhone memory reliability.
-No real payment is made by the automated checks.
+Node checks cover matching, quote minimum/freshness, code verification, delayed
+QR work, lazy QR loading, session-only preview, restore-link verification, storage
+failures, batch worker cleanup, and safe PWA updates. Browser checks cover the
+simplified screens, hidden preview, notes, presets, and real batch inference.
+Retest payment, pass saving/restoration, downloads, and batches on a physical
+phone/PWA after publishing. No real bitcoin was sent during implementation.
 
 Sources: [QR Code Styling](https://github.com/kozakdenys/qr-code-styling),
-[mempool REST API](https://mempool.space/docs/api/rest), and the underlying
-[Esplora transaction/address API](https://github.com/Blockstream/esplora/blob/master/API.md).
-
-### Implementation checks · October 14, 2026
-
-- All 19 Node tests and the v1.1.0 release consistency check passed.
-- A live mempool price/address lookup produced the displayed QR and payment URI.
-- An isolated browser fixture simulated a qualifying mempool payment, automatic
-  unlock, code restoration, and a reload with the upgrade preserved.
-- The browser saved a message with diagnostics, a gradient preset, and an image
-  preset. Two actual model inferences stored batch PNGs, which survived reload.
-  A separate actual inference exported with the saved image backdrop.
-- Desktop and 390 px phone layouts were inspected; address copying and the sticky
-  close control were checked. Blob-download behavior is covered by the DOM helper
-  test; the in-app browser did not expose a completed code-download event.
-
-An actual Bitcoin payment and physical iPhone/PWA batch/download checks remain
-for the owner’s live testing. No bitcoin was sent during implementation.
-
-### Giving prompt fix · v1.1.1
-
-The header, batch, backdrop, and footer prompts share a declarative Vue model.
-They no longer call a component ref's `open()` method, which could be undefined
-in an affected browser. All four buttons were checked opening and closing the
-dialog without console errors; phone reopening and Escape dismissal were also
-checked. All 20 Node tests pass, including shared-state dismissal and PWA guards.
+[mempool REST API](https://mempool.space/docs/api/rest), and
+[Esplora address/transaction API](https://github.com/Blockstream/esplora/blob/master/API.md).

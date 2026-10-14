@@ -1,6 +1,7 @@
 import { createApp, computed, nextTick, onMounted, onUnmounted, ref } from './vendor/vue-3.5.43.esm-browser.prod.js'
 import { APP_VERSION, createDiagnostics } from './diagnostics.js'
 import { createPwa } from './pwa.js'
+import { useDeveloperPreview } from './developer-preview.js'
 import { GivingPanel } from './giving-ui.js'
 import { useSupporterStudio, coverRect } from './supporter-studio.js'
 
@@ -23,6 +24,7 @@ createApp({
 
     const choices = ref([...baseChoices])
     const givingOpen = ref(false)
+    const realSupporter = ref(false)
     const fileInput = ref(null)
     const fileName = ref('')
     const dimensions = ref('')
@@ -92,11 +94,28 @@ createApp({
       clearPhoto: () => clearImage(true),
       getOutput: () => exportFile,
       onPresets: presets => {
-        choices.value = [...baseChoices, ...presets]
+        choices.value = [...baseChoices, ...(studio.supporter.value ? presets : [])]
         if (!choices.value.some(choice => choice.id === selected.value)) selectBackground('transparent')
       },
       onError: cause => diagnostics.record('batch-storage-error', errorDetails(cause)),
     })
+    const developer = useDeveloperPreview({
+      isBusy: () => (busy.value && canRetry.value) || shareBusy.value || studio.batchRunning.value || studio.presetSaving.value,
+      onChange: refreshSupporterAccess,
+    })
+
+    function refreshSupporterAccess() {
+      const preview = developer.previewSupporter.value && !realSupporter.value
+      studio.setSupporter(realSupporter.value || developer.previewSupporter.value, { preview })
+      choices.value = [...baseChoices, ...(studio.supporter.value ? studio.presets.value : [])]
+      if (!choices.value.some(choice => choice.id === selected.value)) selectBackground('transparent')
+    }
+
+    function updateSupporter(value) {
+      realSupporter.value = Boolean(value)
+      refreshSupporterAccess()
+    }
+
     function openGiving() { givingOpen.value = true }
     function settleBatch(success) { const done = batchCompletion; batchCompletion = null; done?.(success) }
     function getDiagnostics() {
@@ -634,6 +653,7 @@ createApp({
 
     onMounted(() => {
       studio.initialize()
+      developer.initializeDeveloperPreview()
       mark('app-opened', { version: APP_VERSION }, false)
       refreshCache()
       pwa = createPwa({
@@ -662,7 +682,7 @@ createApp({
       window.removeEventListener('pagehide', pageLeaving)
       document.removeEventListener('visibilitychange', pageHidden)
     })
-    return { ...studio, openGiving, givingOpen, getDiagnostics, CACHE_KEY, choices, fileInput, fileName, dimensions, originalUrl, resultUrl, exportUrl,
+    return { ...studio, ...developer, updateSupporter, openGiving, givingOpen, getDiagnostics, CACHE_KEY, choices, fileInput, fileName, dimensions, originalUrl, resultUrl, exportUrl,
   selected, phase, backend, modelLoaded, downloadFile, downloadProgress, statusDetail, error,
   dragOver, showOriginal, cacheFiles, cacheBytes, cacheAvailable, origin,
   busy, currentChoice, exportName, stageText, cacheSize, previewStyle,

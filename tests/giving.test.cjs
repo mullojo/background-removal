@@ -22,6 +22,8 @@ test('gift request freezes a fresh USD quote, snapshots existing payments, and p
   assert.equal(g.paymentUri(intent), `bitcoin:${g.BITCOIN_ADDRESS}?amount=0.00010008&label=Cutout%20gift`)
   assert.deepEqual(g.decodeRequest(g.encodeRequest(intent)), intent)
   await assert.rejects(g.createGiftIntent(0, fetcher, now), /between/)
+  await assert.rejects(g.createGiftIntent(5, fetcher, now), /between \$10/)
+  await assert.rejects(g.createGiftIntent(9.99, fetcher, now), /between \$10/)
   await assert.rejects(g.createGiftIntent(10, async url => response(url.endsWith('/prices') ? { USD: 100000, time: now / 1000 - 7200 } : []), now), /fresh Bitcoin price/)
 })
 
@@ -106,12 +108,13 @@ test('giving dialog follows shared open state and dismissal keeps its parent syn
     onMounted() {}, onUnmounted() {},
     document: { activeElement: { focus() { focused++ } } },
     BITCOIN_ADDRESS: 'test-address',
+    clearInterval, setInterval,
   })
-  vm.runInContext(fs.readFileSync(path.join(root, 'main/giving-ui.js'), 'utf8').replace(/^import .*\n/gm, '').replace('export const GivingPanel', 'globalThis.GivingPanel'), context)
+  vm.runInContext(fs.readFileSync(path.join(root, 'main/giving-ui.js'), 'utf8').replace(/^import[\s\S]*?from '[^']+'\n/gm, '').replace('export const GivingPanel', 'globalThis.GivingPanel'), context)
   const props = { modelValue: false, diagnostics: () => '{}' }
   const panel = context.GivingPanel.setup(props, { emit: (...event) => emitted.push(event) })
   panel.dialog.value = { showModal() { opened++ }, close() { closed++ }, scrollTop: 999 }
-  assert.equal(watches.length, 1)
+  assert.equal(watches.length, 2)
   for (let i = 0; i < 3; i++) {
     props.modelValue = true
     await watches[0].callback(watches[0].getter())
@@ -131,4 +134,131 @@ test('giving dialog follows shared open state and dismissal keeps its parent syn
   assert.match(html, /<giving-panel v-model="givingOpen"[^>]*><\/giving-panel>/)
   assert.doesNotMatch(html, /givingPanel\.open/)
   assert.match(context.GivingPanel.template, /@click="\$emit\('update:modelValue', true\)"/)
+})
+
+test('pending gifts expose no code and QR/payment work waits until after the dialog paints', async () => {
+  const frames = [], sequence = []
+  const context = vm.createContext({
+    ...await giving,
+    ref: value => ({ value }),
+    computed: getter => ({ get value() { return getter() } }),
+    watch() {}, onMounted() {}, onUnmounted() {},
+    document: { activeElement: { focus() {} } },
+    window: { location: { href: 'https://cutout.example/main/', hash: '' } },
+    URL, URLSearchParams, clearInterval, setInterval,
+    afterPaint: callback => frames.push(callback),
+    loadQrLibrary: async () => { sequence.push('qr'); throw Error('Not needed before paint') },
+  })
+  vm.runInContext(fs.readFileSync(path.join(root, 'main/giving-ui.js'), 'utf8').replace(/^import[\s\S]*?from '[^']+'\n/gm, '').replace('export const GivingPanel', 'globalThis.GivingPanel'), context)
+  const props = { modelValue: true, preview: false }
+  const panel = context.GivingPanel.setup(props, { emit() {} })
+  panel.dialog.value = { showModal() { sequence.push('dialog') }, close() {} }
+  panel.intent.value = { sats: 10008, rate: 100000, baseline: [], createdAt: now }
+  panel.open()
+  assert.deepEqual(sequence, ['dialog'])
+  assert.equal(frames.length, 1)
+  assert.equal(panel.code.value, '', 'Neither pending payments nor developer preview can issue a code')
+  panel.close()
+  frames[0]()
+  assert.deepEqual(sequence, ['dialog'], 'Closing before the first paint cancels queued work')
+  props.preview = true
+  assert.equal(panel.showStudio.value, true, 'Developer preview opens the notes without a receipt')
+  panel.supporter.value = { v: 1, sats: 10008, rate: 100000, createdAt: now, txid: id('a') }
+  assert.match(panel.code.value, /^CUTOUT1\./)
+  assert.match(panel.restoreLink.value, /#supporter=CUTOUT1\./)
+})
+
+test('hidden developer preview uses session storage and can be switched off without changing real gifts', () => {
+  const saved = new Map()
+  let changes = 0, busy = false
+  const context = vm.createContext({
+    ref: value => ({ value }), Date,
+    window: { sessionStorage: {
+      getItem: key => saved.get(key),
+      setItem: (key, value) => saved.set(key, value),
+      removeItem: key => saved.delete(key),
+    } },
+  })
+  vm.runInContext(fs.readFileSync(path.join(root, 'main/developer-preview.js'), 'utf8').replace(/^import .*\n/gm, '').replaceAll('export ', ''), context)
+  const preview = context.useDeveloperPreview({ isBusy: () => busy, onChange: () => changes++ })
+  for (let i = 0; i < 6; i++) preview.revealDeveloperTools()
+  assert.equal(preview.developerTools.value, false)
+  preview.revealDeveloperTools()
+  assert.equal(preview.developerTools.value, true)
+  preview.setPreviewSupporter(true)
+  assert.equal(saved.get('cutout-preview-supporter'), '1')
+  assert.equal(preview.previewSupporter.value, true)
+  busy = true
+  preview.setPreviewSupporter(false)
+  assert.equal(preview.previewSupporter.value, true, 'Do not change feature access during a batch/export')
+  busy = false
+  preview.setPreviewSupporter(false)
+  assert.equal(saved.size, 0)
+  assert.equal(changes, 2)
+  assert.equal(preview.previewSupporter.value, false)
+})
+
+test('QR library is lazy, shared across requests, and retryable after a load failure', async () => {
+  const scripts = []
+  const context = vm.createContext({
+    URL, Promise,
+    document: {
+      createElement: () => ({ remove() {} }),
+      head: { append(script) { scripts.push(script) } },
+    },
+  })
+  vm.runInContext(fs.readFileSync(path.join(root, 'main/qr-loader.js'), 'utf8').replaceAll('export ', '').replaceAll('import.meta.url', "'https://cutout.example/main/qr-loader.js'"), context)
+  assert.equal(scripts.length, 0)
+  const first = context.loadQrLibrary()
+  const failed = assert.rejects(first, /QR could not load/)
+  assert.equal(context.loadQrLibrary(), first)
+  assert.equal(scripts.length, 1)
+  scripts[0].onerror()
+  await failed
+  const next = context.loadQrLibrary()
+  assert.equal(scripts.length, 2)
+  context.QRCodeStyling = function QR() {}
+  scripts[1].onload()
+  assert.equal(await next, context.QRCodeStyling)
+  assert.equal(await context.loadQrLibrary(), context.QRCodeStyling)
+  assert.equal(scripts.length, 2)
+})
+
+test('a saved restore link reveals the pass only after its gift is verified', async () => {
+  const g = await giving
+  const receipt = { v: 1, txid: id('a'), sats: 10008, rate: 100000, createdAt: now }
+  const code = g.encodeCode(receipt)
+  const mounted = [], saved = [], emitted = [], replaced = []
+  let completeVerification
+  const props = { modelValue: false, preview: false }
+  const context = vm.createContext({
+    ...g, URL, URLSearchParams, clearInterval, setInterval,
+    ref: value => ({ value }), computed: getter => ({ get value() { return getter() } }),
+    watch() {}, onMounted: fn => mounted.push(fn), onUnmounted() {},
+    document: { addEventListener() {} },
+    window: {
+      addEventListener() {},
+      location: { href: `https://cutout.example/main/#supporter=${code}`, hash: `#supporter=${code}`, pathname: '/main/', search: '' },
+      history: { replaceState: (...args) => replaced.push(args) },
+    },
+    localStore: {
+      get: async () => undefined, list: async () => [],
+      put: async (name, item) => saved.push({ name, item }),
+    },
+    requestPersistence: async () => false,
+    verifyCode: input => { assert.equal(input, code); return new Promise(resolve => { completeVerification = resolve }) },
+  })
+  vm.runInContext(fs.readFileSync(path.join(root, 'main/giving-ui.js'), 'utf8').replace(/^import[\s\S]*?from '[^']+'\n/gm, '').replace('export const GivingPanel', 'globalThis.GivingPanel'), context)
+  const panel = context.GivingPanel.setup(props, { emit: (...event) => emitted.push(event) })
+  await mounted[0]()
+  assert.equal(panel.restoring.value, true)
+  assert.equal(panel.code.value, '')
+  assert.equal(saved.length, 0)
+  completeVerification(receipt)
+  await new Promise(resolve => setImmediate(resolve))
+  assert.equal(panel.restoring.value, false)
+  assert.equal(panel.code.value, code)
+  assert.equal(saved[0].item.id, 'supporter')
+  assert.deepEqual(emitted.find(event => event[0] === 'supporter'), ['supporter', true])
+  assert.equal(replaced[0][2], '/main/')
 })
