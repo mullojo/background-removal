@@ -48,7 +48,23 @@
               <span class="image-badge">{{ resultUrl && !showOriginal ? 'AFTER' : 'BEFORE' }}</span>
             </template>
           </div>
-          <div class="canvas-footer"><div class="file-label"><span class="file-icon">▧</span><span class="truncate">{{ fileName || 'No image selected' }}</span></div><div class="canvas-actions"><button v-if="resultUrl" class="text-action" @pointerdown="showOriginal = true" @pointerup="showOriginal = false" @pointerleave="showOriginal = false" @keydown.space.prevent="showOriginal = true" @keyup.space="showOriginal = false">Hold to compare</button><button class="text-action" @click="fileInput.click()">{{ originalUrl ? 'Change image' : 'Upload image' }} <span aria-hidden="true">↗</span></button></div></div>
+          <div v-if="originalUrl || canRetry" class="canvas-footer">
+            <div class="canvas-actions">
+              <button v-if="resultUrl" class="canvas-button compare-button" :class="{ 'is-active': showOriginal }" :aria-pressed="showOriginal" :disabled="busy || shareBusy" @click="showOriginal = !showOriginal" @contextmenu.prevent>
+                <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><rect x="2.5" y="3.5" width="15" height="13" rx="3" stroke="currentColor" stroke-width="1.5"/><path d="M10 3.5v13M6.5 8l-2 2 2 2m7-4 2 2-2 2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                Compare original
+              </button>
+              <button class="canvas-button change-button" :disabled="busy || shareBusy" @click="fileInput.click()">
+                <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M10 4v12M4 10h12" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+                Change image
+              </button>
+            </div>
+            <button class="canvas-button reset-button" :disabled="busy || shareBusy" @click="clearImage">
+              <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M4 8a6 6 0 1 1 .8 6M4 3.5V8h4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              Start over
+            </button>
+            <p v-if="fileName" class="file-label" :title="fileName">{{ fileName }}</p>
+          </div>
           <input ref="fileInput" class="sr-only" type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/bmp" @change="onFileChange" />
         </section>
 

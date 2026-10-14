@@ -46,6 +46,18 @@ model cache leaves it empty until the next upload or **Load model** action.
 
 For the model architecture and the browser processing flow, see the [main project README](../README.md#ormbg-model-architecture).
 
+## Image controls
+
+After processing, **Compare original** toggles between the source photo and the
+cutout with a tap or keyboard activation. The pressed button and BEFORE/AFTER
+badge show which view is active. **Change image** chooses another photo using the
+same fresh-worker flow. **Start over** clears the photo and its preview/export
+resources and resets the backdrop to transparent; downloaded model files remain
+cached. Controls wait until processing/export/sharing finishes. The filename is
+shown as a small caption below the main controls.
+
+[Desktop toolbar](../docs/images/cutout-toolbar-desktop.jpg) · [Phone toolbar](../docs/images/cutout-toolbar-mobile.jpg)
+
 ## Mobile saving and troubleshooting
 
 **Download image** saves the selected PNG. On browsers that support sharing image files, **Share / Save…** opens the native share sheet. On iPhone, choose **Save Image** to save to Photos when that action is available. The shared file includes the selected transparent, solid-color, or gradient background.

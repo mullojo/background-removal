@@ -335,6 +335,27 @@ createApp({
       mark('cancelled', {}, false)
     }
 
+    function clearImage() {
+      if (busy.value || shareBusy.value) return
+      requestId += 1
+      activeRequest = null
+      queuedFile = null
+      pendingPhoto = null
+      clearTimeout(slowTimer)
+      stopWorker('start-over')
+      releaseImage()
+      sourceFile = null
+      canRetry.value = false
+      selected.value = 'transparent'
+      dragOver.value = false
+      error.value = ''
+      diagnosticText.value = ''
+      diagnosticMessage.value = ''
+      phase.value = 'idle'
+      statusDetail.value = 'Choose a new photo when you’re ready.'
+      diagnostics.record('image-cleared', {}, { stage: 'idle', active: false, image: null })
+    }
+
     function retryWasm() {
       if (!sourceFile || busy.value) return
       stopWorker('wasm-retry')
@@ -598,7 +619,7 @@ createApp({
   selected, phase, backend, modelLoaded, downloadFile, downloadProgress, statusDetail, error,
   dragOver, showOriginal, cacheFiles, cacheBytes, cacheAvailable, origin,
   busy, currentChoice, stageText, cacheSize, previewStyle,
-  refreshCache, clearCache, loadModel, acceptFile, onFileChange, onDrop,
+  refreshCache, clearCache, loadModel, acceptFile, onFileChange, onDrop, clearImage,
   selectBackground, shareImage, shareBusy, canShareFile, exportMessage, exportBusy,
   copyDiagnostics, diagnosticText, diagnosticMessage, interruptedNotice, cancelRun, retryWasm, previewError, preferWasm, canRetry, APP_VERSION,
   pwaState, installApp: () => pwa?.install(), updateApp: () => pwa?.update() }

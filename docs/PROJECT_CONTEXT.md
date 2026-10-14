@@ -91,4 +91,9 @@ image through Change image, followed by a tab crash on another retry, in both
 Safari and installed PWA. `2026-10-13-mobile-4` replaces model-session reuse with
 one inference per worker: dispose the pipeline, terminate the worker before export,
 release the previous image before loading a fresh session, and preserve downloaded
-weights. Lifecycle diagnostics and tests cover this path; device confirmation is pending.
+weights. Lifecycle diagnostics and tests cover this path. The user subsequently reported repeated successful iPhone runs and confirmed the mobile issue was resolved.
+
+Version `2026-10-13-ui-1` improves the image toolbar: tap-to-toggle Compare original,
+a prominent Change image button, a quieter Start over action, and a small filename
+caption without the checkbox-like glyph. Start over releases image resources and
+forgets the source while preserving downloaded models and the PWA shell.

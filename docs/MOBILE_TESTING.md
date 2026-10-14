@@ -103,6 +103,20 @@ The local in-app browser also completed three real WebGPU runs using the project
 icon PNGs through Change image, including a backdrop change between runs, without
 reloading. This checks runtime compatibility rather than cutout quality or iPhone stability.
 
+The user's subsequent repeated physical iPhone tests reported success on successive
+images with `mobile-4`, confirming the reset change resolved the reported behavior
+in those tests.
+
+## UI-1: touch-friendly image controls
+
+`2026-10-13-ui-1` replaces hold-to-compare with a tap-to-toggle **Compare original**
+button, groups it with **Change image**, and adds **Start over**. Buttons use
+44-pixel minimum targets and suppress text selection/callouts. The filename is a
+small caption without the square glyph. Start over releases the image and resets
+the backdrop while preserving downloaded weights and the PWA shell. On a phone,
+check tapping Compare twice, keyboard activation where available, Change image,
+and Start over followed by another upload.
+
 ## Remote inspection from a Mac
 
 On iPhone, enable **Settings → Apps → Safari → Advanced → Web Inspector**. On Mac, enable **Safari → Settings → Advanced → Show features for web developers**. Connect and trust the phone, open the app on the phone, then select **Develop → your iPhone → the app URL** in Mac Safari. Open Console before reproducing the issue.
