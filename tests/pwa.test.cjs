@@ -218,6 +218,11 @@ test('offline uploads wait for connectivity and model readiness; worker failures
   vm.runInContext(source, context)
   assert.equal(workers.length, 0)
   assert.equal(app.phase.value, 'offline')
+  app.openGiving()
+  assert.equal(app.givingOpen.value, true)
+  assert.equal(pwaHooks.isBusy(), true, 'Giving dialog must defer automatic reloads')
+  app.givingOpen.value = false
+  assert.equal(pwaHooks.isBusy(), false)
   await app.acceptFile({ name: 'local.png', type: 'image/png', size: 100 })
   assert.equal(decodes, 0)
   assert.equal(workers.length, 0)

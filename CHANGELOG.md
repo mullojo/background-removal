@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.1.1 — 2026-10-14
+
+- Open every giving prompt through shared Vue state instead of a component ref,
+  fixing browsers where the workspace, backdrop, and footer buttons could throw
+  an undefined-reference error. Keep header opening, dismissal, focus return, and
+  the PWA update guard synchronized through the same state.
+- Add regression checks for all giving entry points and repeated open/close cycles.
+
 ## 1.1.0 — 2026-10-14
 
 - Add a responsive bitcoin giving dialog with bundled QR Code Styling, wallet links,

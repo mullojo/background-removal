@@ -22,7 +22,6 @@ createApp({
     ]
 
     const choices = ref([...baseChoices])
-    const givingPanel = ref(null)
     const givingOpen = ref(false)
     const fileInput = ref(null)
     const fileName = ref('')
@@ -98,6 +97,7 @@ createApp({
       },
       onError: cause => diagnostics.record('batch-storage-error', errorDetails(cause)),
     })
+    function openGiving() { givingOpen.value = true }
     function settleBatch(success) { const done = batchCompletion; batchCompletion = null; done?.(success) }
     function getDiagnostics() {
       return diagnostics.report({ phase: phase.value, backend: backend.value, requestedBackend: preferWasm.value ? 'wasm' : 'auto', error: error.value ? errorDetails(error.value).message : '', backdrop: selected.value, pwa: pwaState.value })
@@ -662,7 +662,7 @@ createApp({
       window.removeEventListener('pagehide', pageLeaving)
       document.removeEventListener('visibilitychange', pageHidden)
     })
-    return { ...studio, givingPanel, givingOpen, getDiagnostics, CACHE_KEY, choices, fileInput, fileName, dimensions, originalUrl, resultUrl, exportUrl,
+    return { ...studio, openGiving, givingOpen, getDiagnostics, CACHE_KEY, choices, fileInput, fileName, dimensions, originalUrl, resultUrl, exportUrl,
   selected, phase, backend, modelLoaded, downloadFile, downloadProgress, statusDetail, error,
   dragOver, showOriginal, cacheFiles, cacheBytes, cacheAvailable, origin,
   busy, currentChoice, exportName, stageText, cacheSize, previewStyle,

@@ -143,3 +143,10 @@ Work is recorded here as the v1.1.0 milestone; Bob's human time for this session
 has not yet been estimated or reviewed. The contributed-value ledger remains
 **14 VBs / $1,400** until that estimate is added. Unattended AI implementation
 and testing time must not be automatically treated as Bob's human hours.
+
+### Follow-up · v1.1.1
+
+Fixed the giving prompts to use shared Vue open/close state rather than an
+imperative component reference. Verified all four entry points, phone reopening,
+Escape dismissal, and the PWA update guard. Human-time allocation remains pending
+review; this follow-up is not an additional counted block yet.

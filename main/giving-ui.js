@@ -1,9 +1,9 @@
-import { ref, computed, nextTick, onMounted, onUnmounted } from './vendor/vue-3.5.43.esm-browser.prod.js'
+import { ref, computed, nextTick, watch, onMounted, onUnmounted } from './vendor/vue-3.5.43.esm-browser.prod.js'
 import { localStore, requestPersistence, downloadBlob } from './local-store.js'
 import { BITCOIN_ADDRESS, btc, paymentUri, createGiftIntent, addressTransactions, matchingTransactions, manualTransaction, receiptFor, encodeCode, decodeCode, isSupporter, verifyCode, encodeRequest, decodeRequest } from './giving.js'
 
 export const GivingPanel = {
-  props: { diagnostics: Function }, emits: ['supporter', 'activity'],
+  props: { diagnostics: Function, modelValue: Boolean }, emits: ['supporter', 'update:modelValue'],
   setup(props, { emit }) {
     const dialog = ref(null), qr = ref(null), opened = ref(false), amount = ref(10), intent = ref(null), receipt = ref(null), supporter = ref(null)
     const working = ref(false), checking = ref(false), notice = ref(''), issue = ref(''), restore = ref(''), txid = ref('')
@@ -28,11 +28,18 @@ export const GivingPanel = {
       }).append(qr.value)
     }
     async function open() {
-      previousFocus = document.activeElement; opened.value = true; emit('activity', true)
-      await nextTick(); dialog.value.showModal(); dialog.value.scrollTop = 0; renderQr()
+      if (opened.value) return
+      previousFocus = document.activeElement; opened.value = true
+      await nextTick()
+      if (!opened.value || !props.modelValue) return
+      dialog.value.showModal(); dialog.value.scrollTop = 0; renderQr()
       if (intent.value) checkPayment()
     }
-    function close() { dialog.value?.close(); opened.value = false; emit('activity', false); previousFocus?.focus() }
+    function close() {
+      if (!opened.value) return
+      dialog.value?.close(); opened.value = false; emit('update:modelValue', false); previousFocus?.focus()
+    }
+    watch(() => props.modelValue, value => value ? open() : close(), { flush: 'post' })
     async function createRequest() {
       if (working.value || checking.value) return
       working.value = true; issue.value = ''; notice.value = ''
@@ -145,7 +152,7 @@ export const GivingPanel = {
       code, uri, address: BITCOIN_ADDRESS, btc, open, close, createRequest, checkPayment, restoreCode, saveCode, copy, saveMessage, downloadDraft, removeDraft, importFile, renderQr }
   },
   template: `
-    <button class="give-nav" @click="open"><span aria-hidden="true">♡</span> {{ supporter ? 'Supporter studio' : 'Give & grow' }}</button>
+    <button class="give-nav" @click="$emit('update:modelValue', true)"><span aria-hidden="true">♡</span> {{ supporter ? 'Supporter studio' : 'Give & grow' }}</button>
     <Teleport to="body"><dialog ref="dialog" class="giving-dialog" aria-labelledby="giving-title" @cancel.prevent="close" @click="($event.target === dialog) && close()">
       <div class="giving-inner">
         <div class="dialog-close-wrap"><button class="dialog-close" aria-label="Close giving" autofocus @click="close">×</button></div>

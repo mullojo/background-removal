@@ -95,3 +95,40 @@ test('code and output downloads attach a real link and defer URL revocation', as
     deferred.callback()
   } finally { global.document = originalDocument; global.setTimeout = originalTimeout }
 })
+
+test('giving dialog follows shared open state and dismissal keeps its parent synchronized', async () => {
+  const watches = [], emitted = []
+  let focused = 0, opened = 0, closed = 0
+  const context = vm.createContext({
+    ...await giving,
+    ref: value => ({ value }), computed: getter => ({ get value() { return getter() } }),
+    nextTick: () => Promise.resolve(), watch: (getter, callback) => watches.push({ getter, callback }),
+    onMounted() {}, onUnmounted() {},
+    document: { activeElement: { focus() { focused++ } } },
+    BITCOIN_ADDRESS: 'test-address',
+  })
+  vm.runInContext(fs.readFileSync(path.join(root, 'main/giving-ui.js'), 'utf8').replace(/^import .*\n/gm, '').replace('export const GivingPanel', 'globalThis.GivingPanel'), context)
+  const props = { modelValue: false, diagnostics: () => '{}' }
+  const panel = context.GivingPanel.setup(props, { emit: (...event) => emitted.push(event) })
+  panel.dialog.value = { showModal() { opened++ }, close() { closed++ }, scrollTop: 999 }
+  assert.equal(watches.length, 1)
+  for (let i = 0; i < 3; i++) {
+    props.modelValue = true
+    await watches[0].callback(watches[0].getter())
+    assert.equal(panel.opened.value, true)
+    assert.equal(panel.dialog.value.scrollTop, 0)
+    panel.close()
+    assert.deepEqual(emitted.at(-1), ['update:modelValue', false])
+    props.modelValue = false
+    watches[0].callback(watches[0].getter())
+    assert.equal(panel.opened.value, false)
+  }
+  assert.equal(opened, 3)
+  assert.equal(closed, 3, 'Parent-state echo must not close a second time')
+  assert.equal(focused, 3)
+  const html = fs.readFileSync(path.join(root, 'main/index.html'), 'utf8')
+  assert.equal((html.match(/@click="openGiving"/g) || []).length, 3)
+  assert.match(html, /<giving-panel v-model="givingOpen"[^>]*><\/giving-panel>/)
+  assert.doesNotMatch(html, /givingPanel\.open/)
+  assert.match(context.GivingPanel.template, /@click="\$emit\('update:modelValue', true\)"/)
+})

@@ -173,3 +173,11 @@ Sources: [QR Code Styling](https://github.com/kozakdenys/qr-code-styling),
 
 An actual Bitcoin payment and physical iPhone/PWA batch/download checks remain
 for the owner’s live testing. No bitcoin was sent during implementation.
+
+### Giving prompt fix · v1.1.1
+
+The header, batch, backdrop, and footer prompts share a declarative Vue model.
+They no longer call a component ref's `open()` method, which could be undefined
+in an affected browser. All four buttons were checked opening and closing the
+dialog without console errors; phone reopening and Escape dismissal were also
+checked. All 20 Node tests pass, including shared-state dismissal and PWA guards.
