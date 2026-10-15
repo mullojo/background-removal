@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.3.0 — 2026-10-14
+
+- Replace wallet launching with visible address copying and expandable address,
+  amount, and note copying. Use gift wording and Bitcoin details throughout the UI.
+- Add a centered Bitcoin QR mark with high error correction and an SVG close icon.
+- Show batch outputs as compact thumbnail tiles with individual PNG downloads and
+  one cancellable ZIP download. Retain small thumbnails in IndexedDB and release
+  their URLs when removed; keep original exports and single-use worker cleanup.
+- Show developer-tools and preview status beside the version, toggle tools with
+  seven more taps, and clarify background-image selection and saving.
+- Preserve PWA sessions while preparing a ZIP. Verify archives with an independent
+  ZIP reader, including duplicate names, Unicode, checksums, and cancellation.
+
 ## 1.2.0 — 2026-10-14
 
 - Simplify giving into amount, payment, and supporter-studio screens, with a $10

@@ -1,4 +1,4 @@
-// Load the classic UMD bundle only when a payment actually needs a QR.
+// Load the classic UMD bundle only when a gift actually needs a QR.
 let loading
 
 export function loadQrLibrary() {

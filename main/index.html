@@ -33,9 +33,10 @@
     <header class="topbar">
       <div class="brand"><span class="brand-mark"><span></span></span><span class="brand-wordmark"><span>cutout<span class="brand-dot">.</span></span><button
           class="brand-version min-h-5 border-0 bg-transparent p-0 text-left"
-          :aria-label="'App version ' + APP_VERSION"
+          :aria-label="'App version ' + APP_VERSION + (developerTools ? ', developer tools shown' : ', developer tools hidden')"
+          :aria-pressed="developerTools"
           @click="revealDeveloperTools"
-        >v{{ APP_VERSION }}</button></span></div>
+        >v{{ APP_VERSION }}<span v-if="developerTools" class="ml-1 rounded bg-amber-50 px-1 text-[9px] font-semibold text-amber-800">TOOLS ON</span><span v-if="previewSupporter" class="ml-1 rounded bg-amber-50 px-1 text-[9px] font-semibold text-amber-800">PREVIEW ON</span></button></span></div>
       <div class="topbar-actions flex items-center gap-3 sm:gap-6"><span v-if="previewSupporter" class="hidden rounded-full bg-amber-50 px-2 py-1 text-[10px] font-semibold text-amber-800 sm:inline-flex">TEST MODE</span><div class="topbar-right"><span class="privacy-dot"></span> Private, in your browser</div><giving-panel v-model="givingOpen" :diagnostics="getDiagnostics" :preview="previewSupporter" @supporter="updateSupporter"></giving-panel></div>
     </header>
 
@@ -53,7 +54,7 @@
             <div v-if="!originalUrl" class="empty-state">
               <div class="empty-icon"><svg viewBox="0 0 48 48" fill="none" aria-hidden="true"><rect x="6" y="7" width="36" height="34" rx="4" stroke="currentColor" stroke-width="1.6"/><circle cx="17" cy="18" r="3" stroke="currentColor" stroke-width="1.6"/><path d="m8 34 11-11 7 7 5-5 9 9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
               <h3>Drop your image here</h3><p>or choose a photo to get started</p>
-              <button class="button button-dark" :disabled="batchRunning || presetSaving" @click="fileInput.click()"><span>Choose a photo</span><span aria-hidden="true">↗</span></button>
+              <button class="button button-dark" :disabled="batchRunning || presetSaving || archiveBusy" @click="fileInput.click()"><span>Choose a photo</span><span aria-hidden="true">↗</span></button>
               <small>JPG, PNG, WebP · One image at a time</small>
             </div>
             <template v-else>
@@ -65,16 +66,16 @@
           </div>
           <div v-if="originalUrl || canRetry" class="canvas-footer">
             <div class="canvas-actions">
-              <button v-if="resultUrl" class="canvas-button compare-button" :class="{ 'is-active': showOriginal }" :aria-pressed="showOriginal" :disabled="busy || shareBusy || batchRunning || presetSaving" @click="showOriginal = !showOriginal" @contextmenu.prevent>
+              <button v-if="resultUrl" class="canvas-button compare-button" :class="{ 'is-active': showOriginal }" :aria-pressed="showOriginal" :disabled="busy || shareBusy || batchRunning || presetSaving || archiveBusy" @click="showOriginal = !showOriginal" @contextmenu.prevent>
                 <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><rect x="2.5" y="3.5" width="15" height="13" rx="3" stroke="currentColor" stroke-width="1.5"/><path d="M10 3.5v13M6.5 8l-2 2 2 2m7-4 2 2-2 2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 Compare original
               </button>
-              <button class="canvas-button change-button" :disabled="busy || shareBusy || batchRunning || presetSaving" @click="fileInput.click()">
+              <button class="canvas-button change-button" :disabled="busy || shareBusy || batchRunning || presetSaving || archiveBusy" @click="fileInput.click()">
                 <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M10 4v12M4 10h12" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
                 Change image
               </button>
             </div>
-            <button class="canvas-button reset-button" :disabled="busy || shareBusy || batchRunning || presetSaving" @click="clearImage()">
+            <button class="canvas-button reset-button" :disabled="busy || shareBusy || batchRunning || presetSaving || archiveBusy" @click="clearImage()">
               <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M4 8a6 6 0 1 1 .8 6M4 3.5V8h4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
               Start over
             </button>
@@ -94,7 +95,7 @@
             <template v-if="supporter">
               <button
                 class="mt-4 min-h-12 w-full rounded-xl bg-forest px-4 text-sm font-semibold text-white disabled:opacity-50"
-                :disabled="busy || shareBusy || batchRunning || presetSaving"
+                :disabled="busy || shareBusy || batchRunning || presetSaving || archiveBusy"
                 @click="batchInput.click()"
               >Choose a batch of photos</button>
               <input ref="batchInput" class="sr-only" type="file" multiple accept="image/*" @change="runBatch">
@@ -112,14 +113,27 @@
               <ul v-if="batchErrors.length" class="mt-3 pl-4 text-xs leading-relaxed text-red-800">
                 <li v-for="failure in batchErrors" :key="failure">{{ failure }}</li>
               </ul>
-              <ul class="m-0 mt-4 list-none space-y-2 p-0">
-                <li v-for="output in outputs" :key="output.id" class="flex items-center gap-2 rounded-xl border border-line bg-paper p-3">
-                  <div class="min-w-0 flex-1">
-                    <strong class="block truncate text-xs">{{ output.name }}</strong>
-                    <small class="mt-1 block text-[10px] text-muted">{{ (output.bytes / 1048576).toFixed(1) }} MB · Saved here</small>
+              <div v-if="outputs.length" class="mt-4 flex flex-wrap items-center justify-between gap-2">
+                <span class="text-xs font-semibold">Saved photos · {{ outputs.length }}</span>
+                <button class="min-h-11 rounded-xl bg-forest px-4 text-xs font-semibold text-white disabled:opacity-50" :disabled="busy || shareBusy || batchRunning || presetSaving || archiveBusy" @click="downloadBatch">Download all · ZIP ↓</button>
+              </div>
+              <div v-if="archiveBusy" class="mt-2 flex items-center justify-between gap-2 text-xs text-muted" role="status">
+                <span>{{ archiveProgress }}</span><button class="min-h-11 px-2 font-semibold text-clay" @click="cancelArchive">Cancel</button>
+              </div>
+              <ul class="m-0 mt-3 grid list-none grid-cols-2 gap-3 p-0 sm:grid-cols-3">
+                <li v-for="output in outputs" :key="output.id" class="min-w-0 overflow-hidden rounded-xl border border-line bg-white">
+                  <div class="checkered flex aspect-square items-center justify-center overflow-hidden">
+                    <img v-if="output.thumbnailUrl" :src="output.thumbnailUrl" :alt="output.name" loading="lazy" class="block size-full object-contain">
+                    <span v-else class="px-3 text-center text-xs text-muted">Saved PNG<br>Preview unavailable</span>
                   </div>
-                  <button class="size-11 shrink-0 rounded-lg bg-sage text-xl text-forest" :aria-label="'Download ' + output.name" @click="downloadOutput(output.id)">↓</button>
-                  <button class="size-11 shrink-0 rounded-lg text-xl text-muted" :disabled="batchRunning" :aria-label="'Remove saved output ' + output.name" @click="removeOutput(output.id)">×</button>
+                  <div class="p-2.5">
+                    <p class="m-0 truncate text-[11px] font-medium" :title="output.name">{{ output.name }}</p>
+                    <small class="mt-1 block text-[10px] text-muted">{{ (output.bytes / 1048576).toFixed(1) }} MB</small>
+                    <div class="mt-2 flex items-center gap-1">
+                      <button class="min-h-11 min-w-0 flex-1 rounded-lg bg-sage px-1 text-[11px] font-semibold text-forest" :aria-label="'Download ' + output.name" @click="downloadOutput(output.id)">Download ↓</button>
+                      <button class="grid size-11 shrink-0 place-items-center rounded-lg text-muted" :disabled="batchRunning || archiveBusy" :aria-label="'Remove saved output ' + output.name" @click="removeOutput(output.id)"><svg class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M10 3h4l1 4H9l1-4ZM6 7l1 14h10l1-14M10 11v6m4-6v6"/></svg></button>
+                    </div>
+                  </div>
                 </li>
               </ul>
               <p v-if="outputs.length" class="mt-3 mb-0 text-[11px] leading-relaxed text-muted">
@@ -132,7 +146,7 @@
             <p v-if="studioNotice" class="mt-3 mb-0 rounded-xl bg-sage p-3 text-xs leading-relaxed text-sage-ink" role="status">{{ studioNotice }}</p>
             <p v-if="supporter && storageNotice" class="mt-3 mb-0 text-[11px] leading-relaxed text-muted">{{ storageNotice }}</p>
           </section>
-          <input ref="fileInput" :disabled="batchRunning || presetSaving" class="sr-only" type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/bmp" @change="onFileChange" />
+          <input ref="fileInput" :disabled="batchRunning || presetSaving || archiveBusy" class="sr-only" type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/bmp" @change="onFileChange" />
         </section>
 
         <aside class="controls-panel">
@@ -142,11 +156,11 @@
             <p v-if="error" class="error-text">{{ error }}</p>
             <button v-if="busy && !exportBusy && phase !== 'compositing'" class="text-action" @click="cancelRun">Stop processing</button>
             <button v-if="phase === 'error' && canRetry && !busy" class="button button-outline full" @click="retryWasm">Retry with WASM <span aria-hidden="true">↗</span></button>
-            <button v-if="!modelLoaded && !busy && !resultUrl" class="button button-outline full" :disabled="batchRunning || presetSaving" @click="loadModel()">Load model <span aria-hidden="true">↗</span></button>
+            <button v-if="!modelLoaded && !busy && !resultUrl" class="button button-outline full" :disabled="batchRunning || presetSaving || archiveBusy" @click="loadModel()">Load model <span aria-hidden="true">↗</span></button>
           </div>
 
           <div class="control-section backdrop-section"><span class="section-index">03 / FINISH</span><div class="section-title-row"><div><h2>Choose a backdrop</h2><p class="section-description">Preview a look, then export it as a PNG.</p></div></div>
-            <div class="swatch-grid" role="group" aria-label="Background choices"><button v-for="choice in choices" :key="choice.id" class="swatch" :class="{ selected: selected === choice.id }" :aria-pressed="selected === choice.id" :disabled="batchRunning || presetSaving" @click="selectBackground(choice.id)"><span class="swatch-color" :class="{ checkered: choice.kind === 'transparent' }" :style="choice.kind === 'solid' ? { background: choice.color } : choice.kind === 'gradient' ? { background: `linear-gradient(135deg, ${choice.colors.join(', ')})` } : choice.kind === 'image' ? { backgroundImage: `url(${choice.url})`, backgroundSize: 'cover', backgroundPosition: 'center' } : {}"><span v-if="selected === choice.id" class="swatch-check">✓</span></span><span>{{ choice.name }}</span></button></div>
+            <div class="swatch-grid" role="group" aria-label="Background choices"><button v-for="choice in choices" :key="choice.id" class="swatch" :class="{ selected: selected === choice.id }" :aria-pressed="selected === choice.id" :disabled="batchRunning || presetSaving || archiveBusy" @click="selectBackground(choice.id)"><span class="swatch-color" :class="{ checkered: choice.kind === 'transparent' }" :style="choice.kind === 'solid' ? { background: choice.color } : choice.kind === 'gradient' ? { background: `linear-gradient(135deg, ${choice.colors.join(', ')})` } : choice.kind === 'image' ? { backgroundImage: `url(${choice.url})`, backgroundSize: 'cover', backgroundPosition: 'center' } : {}"><span v-if="selected === choice.id" class="swatch-check">✓</span></span><span>{{ choice.name }}</span></button></div>
             <details class="brand-presets border-t border-line py-4">
               <summary class="flex min-h-11 cursor-pointer items-center justify-between gap-3 text-xs font-semibold text-forest">
                 Saved backdrops
@@ -156,32 +170,35 @@
                 <p class="mt-2 mb-0 text-xs leading-relaxed text-muted">Keep your favorite colors, gradients, and images for next time.</p>
                 <label class="mt-4 block text-xs text-muted">
                   Backdrop name
-                  <input v-model="presetName" maxlength="40" placeholder="My brand backdrop" class="mt-2 block min-h-11 w-full rounded-lg border border-line px-3 text-sm text-forest" :disabled="busy || batchRunning || presetSaving">
+                  <input v-model="presetName" maxlength="40" placeholder="My brand backdrop" class="mt-2 block min-h-11 w-full rounded-lg border border-line px-3 text-sm text-forest" :disabled="busy || batchRunning || presetSaving || archiveBusy">
                 </label>
                 <label class="mt-4 block text-xs text-muted">
                   Backdrop style
-                  <select v-model="presetKind" class="mt-2 block min-h-11 w-full rounded-lg border border-line bg-white px-3 text-sm text-forest" :disabled="busy || batchRunning || presetSaving">
+                  <select v-model="presetKind" class="mt-2 block min-h-11 w-full rounded-lg border border-line bg-white px-3 text-sm text-forest" :disabled="busy || batchRunning || presetSaving || archiveBusy">
                     <option value="solid">Solid color</option>
                     <option value="gradient">Two-color gradient</option>
                     <option value="image">Background image</option>
                   </select>
                 </label>
                 <div v-if="presetKind !== 'image'" class="mt-4 flex gap-4 text-xs text-muted">
-                  <label>First color<input v-model="colorOne" type="color" class="mt-2 block h-11 w-20 rounded-lg border border-line bg-white p-1" :disabled="busy || batchRunning || presetSaving"></label>
-                  <label v-if="presetKind === 'gradient'">Second color<input v-model="colorTwo" type="color" class="mt-2 block h-11 w-20 rounded-lg border border-line bg-white p-1" :disabled="busy || batchRunning || presetSaving"></label>
+                  <label>First color<input v-model="colorOne" type="color" class="mt-2 block h-11 w-20 rounded-lg border border-line bg-white p-1" :disabled="busy || batchRunning || presetSaving || archiveBusy"></label>
+                  <label v-if="presetKind === 'gradient'">Second color<input v-model="colorTwo" type="color" class="mt-2 block h-11 w-20 rounded-lg border border-line bg-white p-1" :disabled="busy || batchRunning || presetSaving || archiveBusy"></label>
                 </div>
-                <label v-else class="mt-4 block text-xs text-muted">
-                  Backdrop image · up to 10 MB
-                  <input type="file" accept="image/*" class="mt-2 block min-h-11 w-full text-xs" :disabled="busy || batchRunning || presetSaving" @change="presetImage = $event.target.files?.[0] || null">
-                </label>
-                <p v-if="presetKind === 'image'" class="mt-2 mb-0 text-[11px] leading-relaxed text-muted">Saved at up to 1600 px. Centered and cropped to fill your photo.</p>
-                <button class="mt-4 min-h-11 w-full rounded-xl bg-forest px-4 text-xs font-semibold text-white disabled:opacity-50" :disabled="busy || shareBusy || batchRunning || presetSaving || !presetName.trim()" @click="savePreset">
+                <div v-else class="mt-4 rounded-xl border border-line bg-paper p-3">
+                  <p class="m-0 text-xs font-semibold">Upload a background</p>
+                  <p class="mt-2 mb-0 text-[11px] leading-relaxed text-muted">This image sits behind your cutout. Choose a texture, scene, or branded backdrop.</p>
+                  <input ref="presetImageInput" type="file" accept="image/*" class="sr-only" :disabled="busy || batchRunning || presetSaving || archiveBusy" @change="presetImage = $event.target.files?.[0] || null">
+                  <button class="mt-3 min-h-11 w-full rounded-lg border border-line bg-white px-3 text-xs font-semibold" :disabled="busy || batchRunning || presetSaving || archiveBusy" @click="presetImageInput.click()">{{ presetImage ? 'Change background image' : 'Choose background image' }}</button>
+                  <p v-if="presetImage" class="mt-2 mb-0 truncate text-[11px] text-sage-ink" :title="presetImage.name">Selected: {{ presetImage.name }}</p>
+                  <p class="mt-2 mb-0 text-[10px] leading-relaxed text-muted">Up to 10 MB · Saved at up to 1600 px. Centered and cropped to fill your photo. Name it above, then save below.</p>
+                </div>
+                <button class="mt-4 min-h-11 w-full rounded-xl bg-forest px-4 text-xs font-semibold text-white disabled:opacity-50" :disabled="busy || shareBusy || batchRunning || presetSaving || archiveBusy || !presetName.trim()" @click="savePreset">
                   {{ presetSaving ? 'Saving…' : 'Save backdrop' }}
                 </button>
                 <ul class="m-0 mt-3 list-none divide-y divide-line p-0">
                   <li v-for="preset in presets" :key="preset.id" class="flex items-center justify-between gap-2">
-                    <button class="min-h-11 min-w-0 flex-1 text-left text-xs break-words text-forest" :disabled="busy || batchRunning || presetSaving" @click="selectBackground(preset.id)">{{ preset.name }}</button>
-                    <button class="size-11 shrink-0 text-xl text-muted" :disabled="busy || batchRunning || presetSaving" :aria-label="'Delete backdrop ' + preset.name" @click="removePreset(preset.id)">×</button>
+                    <button class="min-h-11 min-w-0 flex-1 text-left text-xs break-words text-forest" :disabled="busy || batchRunning || presetSaving || archiveBusy" @click="selectBackground(preset.id)">{{ preset.name }}</button>
+                    <button class="size-11 shrink-0 text-xl text-muted" :disabled="busy || batchRunning || presetSaving || archiveBusy" :aria-label="'Delete backdrop ' + preset.name" @click="removePreset(preset.id)">×</button>
                   </li>
                 </ul>
                 <p v-if="studioNotice" class="mt-3 mb-0 text-xs leading-relaxed text-muted" role="status">{{ studioNotice }}</p>
@@ -191,12 +208,12 @@
                 <button class="mt-3 min-h-11 w-full rounded-xl border border-line px-3 text-xs font-semibold text-clay" @click="openGiving">Support Cutout</button>
               </template>
             </details>
-            <div class="export-box"><div><strong>Ready for the final touch?</strong><span>Full resolution · PNG</span></div><div class="export-actions"><a v-if="exportUrl && !busy && !batchRunning" class="button button-accent" :href="exportUrl" :download="exportName">Download image</a><button v-else class="button button-accent" disabled>Download image</button><button v-if="canShareFile" class="button button-share" :disabled="busy || shareBusy || batchRunning || presetSaving" @click="shareImage">{{ shareBusy ? 'Sharing…' : 'Share / Save…' }}</button></div></div>
+            <div class="export-box"><div><strong>Ready for the final touch?</strong><span>Full resolution · PNG</span></div><div class="export-actions"><a v-if="exportUrl && !busy && !batchRunning" class="button button-accent" :href="exportUrl" :download="exportName">Download image</a><button v-else class="button button-accent" disabled>Download image</button><button v-if="canShareFile" class="button button-share" :disabled="busy || shareBusy || batchRunning || presetSaving || archiveBusy" @click="shareImage">{{ shareBusy ? 'Sharing…' : 'Share / Save…' }}</button></div></div>
             <p v-if="canShareFile" class="section-description">On iPhone, choose Save Image in the share sheet to save to Photos when available.</p>
             <p v-if="exportMessage" class="section-description" role="status">{{ exportMessage }}</p>
           </div>
 
-          <div class="cache-section"><div class="cache-top"><span class="section-index">MODEL STORAGE</span><span class="cache-indicator"></span></div><p>Saved in this browser’s <strong>Cache Storage</strong> for <code>{{ origin }}</code>. Find it in Developer Tools → Application → Cache Storage → <code>{{ CACHE_KEY }}</code>.</p><div class="cache-footer"><span>{{ cacheAvailable ? `${cacheFiles} cached files · ${cacheFiles ? cacheSize : 'No model saved yet'}` : 'Cache Storage unavailable' }}</span><button :disabled="!cacheFiles || busy || batchRunning || presetSaving" @click="clearCache">Clear model cache ↗</button></div></div>
+          <div class="cache-section"><div class="cache-top"><span class="section-index">MODEL STORAGE</span><span class="cache-indicator"></span></div><p>Saved in this browser’s <strong>Cache Storage</strong> for <code>{{ origin }}</code>. Find it in Developer Tools → Application → Cache Storage → <code>{{ CACHE_KEY }}</code>.</p><div class="cache-footer"><span>{{ cacheAvailable ? `${cacheFiles} cached files · ${cacheFiles ? cacheSize : 'No model saved yet'}` : 'Cache Storage unavailable' }}</span><button :disabled="!cacheFiles || busy || batchRunning || presetSaving || archiveBusy" @click="clearCache">Clear model cache ↗</button></div></div>
           <section class="pwa-section" aria-label="Install Cutout">
             <div class="pwa-heading"><img src="./icons/icon-192.png" width="40" height="40" alt="" /><div><strong>{{ pwaState.installed ? 'Cutout is installed' : 'Keep Cutout close' }}</strong><span>{{ pwaState.installed ? 'Your photo studio, in its own window.' : 'Add your photo studio to your home screen or desktop.' }}</span></div></div>
             <button v-if="pwaState.installable && !pwaState.installed" class="button button-outline full" @click="installApp">Install Cutout <span aria-hidden="true">↗</span></button>
@@ -219,7 +236,7 @@
                   type="checkbox"
                   class="size-4 accent-[#1c3631]"
                   :checked="previewSupporter"
-                  :disabled="(busy && canRetry) || shareBusy || batchRunning || presetSaving"
+                  :disabled="(busy && canRetry) || shareBusy || batchRunning || presetSaving || archiveBusy"
                   @change="setPreviewSupporter($event.target.checked)"
                 >
                 Preview supporter features

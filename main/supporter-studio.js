@@ -1,4 +1,5 @@
 import { ref } from './vendor/vue-3.5.43.esm-browser.prod.js'
+import { createStoredZip } from './zip.js'
 import { localStore, downloadBlob, requestPersistence } from './local-store.js'
 
 export const BATCH_LIMIT = 20
@@ -22,11 +23,18 @@ export function coverRect(width, height, targetWidth, targetHeight) {
   const scale = Math.max(targetWidth / width, targetHeight / height)
   return { x: (targetWidth - width * scale) / 2, y: (targetHeight - height * scale) / 2, width: width * scale, height: height * scale }
 }
-export function useSupporterStudio({ processFile, clearPhoto, getOutput, isBusy, onPresets, onError }) {
+export function useSupporterStudio({ processFile, clearPhoto, getOutput, getThumbnail = () => null, isBusy, onPresets, onError }) {
   const supporter = ref(false), presets = ref([]), outputs = ref([]), storageNotice = ref(''), studioNotice = ref('')
   const presetName = ref(''), presetKind = ref('solid'), colorOne = ref('#b7c8b1'), colorTwo = ref('#f8d2c4'), presetImage = ref(null), presetSaving = ref(false)
   const batchInput = ref(null), batchRunning = ref(false), batchStop = ref(false), batchProgress = ref(''), batchErrors = ref([])
+  const archiveBusy = ref(false), archiveProgress = ref(''), presetImageInput = ref(null)
+  let archiveController
+  let outputUrls = new Map()
   let presetUrls = []
+  function outputMetadata({ blob, thumbnail, ...item }) {
+    if (thumbnail) outputUrls.set(item.id, URL.createObjectURL(thumbnail))
+    return { ...item, thumbnailUrl: outputUrls.get(item.id) || '' }
+  }
   async function refreshPresets() {
     const saved = await localStore.list('presets')
     const next = saved.map(preset => ({ ...preset, url: preset.blob ? URL.createObjectURL(preset.blob) : undefined }))
@@ -36,7 +44,11 @@ export function useSupporterStudio({ processFile, clearPhoto, getOutput, isBusy,
     setTimeout(() => previous.forEach(url => URL.revokeObjectURL(url)), 0)
   }
   async function refreshOutputs() {
-    outputs.value = (await localStore.list('outputs')).map(({ blob, ...item }) => item).sort((a, b) => a.createdAt - b.createdAt)
+    const saved = await localStore.list('outputs')
+    const previous = outputUrls
+    outputUrls = new Map()
+    outputs.value = saved.map(outputMetadata).sort((a, b) => a.createdAt - b.createdAt)
+    setTimeout(() => previous.forEach(url => URL.revokeObjectURL(url)), 0)
   }
   async function initialize() {
     try { await Promise.all([refreshPresets(), refreshOutputs()]) }
@@ -76,7 +88,10 @@ export function useSupporterStudio({ processFile, clearPhoto, getOutput, isBusy,
       }
       validatePreset(preset)
       await localStore.put('presets', preset); await refreshPresets()
-      presetName.value = ''; presetImage.value = null; studioNotice.value = 'Backdrop saved. Choose it below to use it.'
+      presetName.value = ''
+      presetImage.value = null
+      if (presetImageInput.value) presetImageInput.value.value = ''
+      studioNotice.value = 'Backdrop saved. Choose it below to use it.'
     } catch (error) { studioNotice.value = error.message }
     finally { bitmap?.close(); if (canvas) { canvas.width = 0; canvas.height = 0 }; presetSaving.value = false }
   }
@@ -104,9 +119,9 @@ export function useSupporterStudio({ processFile, clearPhoto, getOutput, isBusy,
         const output = getOutput()
         if (!output) throw new Error('No export was produced. The current photo is still in your workspace.')
         if (outputs.value.reduce((sum, item) => sum + item.bytes, 0) + output.size > OUTPUT_LIMIT_BYTES) throw new Error('This output exceeds the 200 MB shelf limit. Download it from the workspace before continuing.')
-        const record = { id: crypto.randomUUID(), name: output.name, bytes: output.size, createdAt: Date.now(), blob: output }
+        const record = { id: crypto.randomUUID(), name: output.name, bytes: output.size, createdAt: Date.now(), blob: output, thumbnail: getThumbnail() }
         await localStore.put('outputs', record)
-        outputs.value.push({ id: record.id, name: record.name, bytes: record.bytes, createdAt: record.createdAt }); stored++
+        outputs.value.push(outputMetadata(record)); stored++
         clearPhoto()
         // Release this photo and yield before the next single-use model worker.
         await new Promise(resolve => setTimeout(resolve, 50))
@@ -123,11 +138,51 @@ export function useSupporterStudio({ processFile, clearPhoto, getOutput, isBusy,
       studioNotice.value = 'Download opened. Your image stays on the shelf until you remove it.'
     } catch (error) { studioNotice.value = error.message }
   }
+  async function downloadBatch() {
+    if (isBusy() || archiveBusy.value || !outputs.value.length) return
+    archiveBusy.value = true
+    archiveController = new AbortController()
+    const saved = [...outputs.value]
+    archiveProgress.value = `Preparing ZIP · 0 of ${saved.length}`
+    try {
+      async function* entries() {
+        for (const item of saved) {
+          const record = await localStore.get('outputs', item.id)
+          if (!record?.blob) throw new Error('A saved image is missing. Try downloading the remaining images individually.')
+          yield record
+        }
+      }
+      const zip = await createStoredZip(entries(), {
+        signal: archiveController.signal,
+        onProgress: count => { archiveProgress.value = `Preparing ZIP · ${count} of ${saved.length}` },
+      })
+      downloadBlob(zip, `cutout-batch-${new Date().toISOString().slice(0, 10)}.zip`)
+      studioNotice.value = 'ZIP download opened. Your images stay on the shelf.'
+    } catch (error) {
+      studioNotice.value = error.name === 'AbortError' ? 'ZIP cancelled. Your saved images are still here.' : error.message
+    } finally {
+      archiveBusy.value = false
+      archiveProgress.value = ''
+      archiveController = null
+    }
+  }
+  function cancelArchive() { archiveController?.abort() }
   async function removeOutput(id) {
-    if (batchRunning.value) return
-    try { await localStore.remove('outputs', id); outputs.value = outputs.value.filter(item => item.id !== id) }
+    if (batchRunning.value || archiveBusy.value) return
+    try {
+      await localStore.remove('outputs', id)
+      outputs.value = outputs.value.filter(item => item.id !== id)
+      const url = outputUrls.get(id)
+      outputUrls.delete(id)
+      setTimeout(() => { if (url) URL.revokeObjectURL(url) }, 0)
+    }
     catch (error) { studioNotice.value = error.message }
   }
-  return { supporter, presets, outputs, storageNotice, studioNotice, presetName, presetKind, colorOne, colorTwo, presetImage, presetSaving, batchInput, batchRunning, batchStop, batchProgress, batchErrors,
-    initialize, setSupporter, savePreset, removePreset, runBatch, downloadOutput, removeOutput, disposeStudio: () => presetUrls.forEach(url => URL.revokeObjectURL(url)) }
+  function disposeStudio() {
+    cancelArchive()
+    presetUrls.forEach(url => URL.revokeObjectURL(url))
+    outputUrls.forEach(url => URL.revokeObjectURL(url))
+  }
+  return { archiveBusy, archiveProgress, downloadBatch, cancelArchive, presetImageInput, supporter, presets, outputs, storageNotice, studioNotice, presetName, presetKind, colorOne, colorTwo, presetImage, presetSaving, batchInput, batchRunning, batchStop, batchProgress, batchErrors,
+    initialize, setSupporter, savePreset, removePreset, runBatch, downloadOutput, removeOutput, disposeStudio }
 }

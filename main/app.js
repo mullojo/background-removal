@@ -68,6 +68,7 @@ createApp({
     let workerGeneration = 0
     let sourceFile = null
     let cutoutBlob = null
+    let exportThumbnail = null
     let exportFile = null
     let exportTask = null
     let exportPending = false
@@ -89,10 +90,11 @@ createApp({
     })
 
     const studio = useSupporterStudio({
-      isBusy: () => busy.value || shareBusy.value || studio.batchRunning.value || studio.presetSaving.value,
+      isBusy: () => busy.value || shareBusy.value || studio.batchRunning.value || studio.presetSaving.value || studio.archiveBusy.value,
       processFile: file => new Promise(resolve => { batchCompletion = resolve; acceptFile(file, preferWasm.value, true).catch(fail) }),
       clearPhoto: () => clearImage(true),
       getOutput: () => exportFile,
+      getThumbnail: () => exportThumbnail,
       onPresets: presets => {
         choices.value = [...baseChoices, ...(studio.supporter.value ? presets : [])]
         if (!choices.value.some(choice => choice.id === selected.value)) selectBackground('transparent')
@@ -100,7 +102,7 @@ createApp({
       onError: cause => diagnostics.record('batch-storage-error', errorDetails(cause)),
     })
     const developer = useDeveloperPreview({
-      isBusy: () => (busy.value && canRetry.value) || shareBusy.value || studio.batchRunning.value || studio.presetSaving.value,
+      isBusy: () => (busy.value && canRetry.value) || shareBusy.value || studio.batchRunning.value || studio.presetSaving.value || studio.archiveBusy.value,
       onChange: refreshSupporterAccess,
     })
 
@@ -160,6 +162,7 @@ createApp({
       resultUrl.value = ''
       exportUrl.value = ''
       exportFile = null
+      exportThumbnail = null
       exportPending = false
       canShareFile.value = false
       exportMessage.value = ''
@@ -180,8 +183,8 @@ createApp({
       if (!context) throw new Error('The browser could not allocate image memory. Try a smaller photo.')
       return context
     }
-    async function createPreview(image) {
-      const scale = Math.min(1, 1280 / Math.max(image.width, image.height))
+    async function createPreview(image, maxEdge = 1280) {
+      const scale = Math.min(1, maxEdge / Math.max(image.width, image.height))
       const canvas = document.createElement('canvas')
       canvas.width = Math.max(1, Math.round(image.width * scale))
       canvas.height = Math.max(1, Math.round(image.height * scale))
@@ -387,7 +390,7 @@ createApp({
     }
 
     function clearImage(fromBatch = false) {
-      if (busy.value || shareBusy.value || (!fromBatch && studio.batchRunning.value)) return
+      if (busy.value || shareBusy.value || (!fromBatch && (studio.batchRunning.value || studio.archiveBusy.value))) return
       requestId += 1
       activeRequest = null
       queuedFile = null
@@ -416,7 +419,7 @@ createApp({
     }
 
     async function acceptFile(file, forceWasm = preferWasm.value, fromBatch = false) {
-      if (!fromBatch && (studio.batchRunning.value || studio.presetSaving.value)) return
+      if (!fromBatch && (studio.batchRunning.value || studio.presetSaving.value || studio.archiveBusy.value)) return
       if (!file) return
       if (!file.type.startsWith('image/')) {
         if (!busy.value) fail(new Error('Choose a JPG, PNG, WebP, or other browser-supported image.'))
@@ -612,6 +615,7 @@ createApp({
             const blob = choice.kind === 'transparent' ? cutoutBlob : await new Promise(resolve => canvas.toBlob(resolve, 'image/png'))
             if (!blob) throw new Error('Could not export this image. Try a smaller photo.')
             if (currentResult !== resultUrl.value || choice.id !== selected.value) continue
+            exportThumbnail = studio.batchRunning.value ? (await createPreview(canvas, 240)).blob : null
             revoke(exportUrl.value)
             exportUrl.value = URL.createObjectURL(blob)
             exportFile = new File([blob], exportName.value, { type: 'image/png' })
@@ -631,7 +635,7 @@ createApp({
     }
 
     function selectBackground(id) {
-      if (studio.batchRunning.value || studio.presetSaving.value) return
+      if (studio.batchRunning.value || studio.presetSaving.value || studio.archiveBusy.value) return
       selected.value = id; updateExport()
     }
 
@@ -657,7 +661,7 @@ createApp({
       mark('app-opened', { version: APP_VERSION }, false)
       refreshCache()
       pwa = createPwa({
-        isBusy: () => busy.value || shareBusy.value || studio.batchRunning.value || studio.presetSaving.value || givingOpen.value,
+        isBusy: () => busy.value || shareBusy.value || studio.batchRunning.value || studio.presetSaving.value || studio.archiveBusy.value || givingOpen.value,
         hasImage: () => canRetry.value,
         onDiagnostic: (event, details) => diagnostics.record(event, details),
         onChange: state => {

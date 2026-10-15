@@ -9,7 +9,7 @@ The stable no-build Cutout app, with these editable implementation files:
 - `app.js` — Vue 3 application state and image export
 - `giving.js` and `giving-ui.js` — Bitcoin requests, portable codes, and giving/message UI
 - `supporter-studio.js` — saved brand backdrops and sequential batch processing
-- `qr-loader.js` — QR runtime loaded only for a payment
+- `qr-loader.js` — QR runtime loaded only for a gift
 - `developer-preview.js` — temporary, session-only extras preview (seven version taps)
 - `local-store.js` — IndexedDB storage and local downloads
 - `model.worker.js` — Transformers.js model loading and inference
@@ -72,7 +72,7 @@ shown as a small caption below the main controls.
 saved color/gradient/image backdrops, batches of up to 20 photos, and a local
 message notebook with optional diagnostics. Supporter passes appear after a recognized gift and include a restore link; the upgrade and finished batch PNGs use IndexedDB.
 Messages stay local and are not delivered yet. Codes use an unsigned honor system.
-See the [giving guide](../docs/GIVING.md) for payment matching, storage limits,
+See the [giving guide](../docs/GIVING.md) for gift matching, storage limits,
 privacy, and phone testing.
 
 ## Mobile saving and troubleshooting

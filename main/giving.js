@@ -2,7 +2,7 @@ export const BITCOIN_ADDRESS = 'bc1q4009vd4j005r5hk5mlry29xu8j6yatv9k0mgp6fstl97
 export const API = 'https://mempool.space/api'
 const TXID = /^[a-f0-9]{64}$/
 export const btc = sats => (sats / 100000000).toFixed(8)
-export const paymentUri = intent => `bitcoin:${BITCOIN_ADDRESS}?amount=${btc(intent.sats)}&label=Cutout%20gift`
+export const giftUri = intent => `bitcoin:${BITCOIN_ADDRESS}?amount=${btc(intent.sats)}&label=Cutout%20gift&message=Supporting%20Cutout`
 export async function apiJson(path, fetcher = fetch) {
   const response = await fetcher(`${API}${path}`, { cache: 'no-store', signal: AbortSignal.timeout(15000) })
   if (!response.ok) throw new Error(response.status === 429 ? 'Mempool is busy. Please wait a moment before checking again.' : 'Could not reach mempool.space. Reconnect and try again.')

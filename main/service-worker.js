@@ -1,11 +1,11 @@
 // Generated release value; bump VERSION with scripts/release.mjs.
-const RELEASE = '1.2.0'
+const RELEASE = '1.3.0'
 const PREFIX = `cutout-shell:${new URL(self.registration.scope).pathname}:`
 const CACHE = `${PREFIX}${RELEASE}`
 const FILES = [
   './', './index.html', './style.css', './app.js', './diagnostics.js', './pwa.js',
-  './giving.js', './giving-ui.js', './qr-loader.js', './developer-preview.js', './local-store.js', './supporter-studio.js', './vendor/qr-code-styling-1.9.2.js',
-  './model.worker.js', './version.js', './manifest.webmanifest', './icons/logo.svg',
+  './giving.js', './giving-ui.js', './qr-loader.js', './developer-preview.js', './local-store.js', './supporter-studio.js', './zip.js', './vendor/qr-code-styling-1.9.2.js',
+  './model.worker.js', './version.js', './manifest.webmanifest', './icons/logo.svg', './icons/bitcoin.svg',
   './icons/icon-192.png', './icons/icon-512.png', './icons/icon-maskable-512.png',
   './icons/apple-touch-icon.png', './vendor/vue-3.5.43.esm-browser.prod.js',
   './vendor/tailwind-browser-4.3.3.js',

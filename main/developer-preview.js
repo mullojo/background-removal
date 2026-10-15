@@ -16,7 +16,7 @@ export function useDeveloperPreview({ isBusy, onChange }) {
     lastTap = now
     if (taps < 7) return
     taps = 0
-    developerTools.value = true
+    developerTools.value = !developerTools.value
   }
 
   function setPreviewSupporter(enabled) {

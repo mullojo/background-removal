@@ -158,3 +158,12 @@ after gift recognition, and rebuilt the touched controls with readable Tailwind
 markup. Reduced modal opening work and added a removable, session-only developer
 preview for testing extras without a gift. Human hours are still pending review;
 these milestones do not automatically add counted VBs.
+
+### Follow-up · v1.3.0
+
+Clarified bitcoin copying with visible address and full gift details, added a
+Bitcoin QR mark, and refined the modal close control. Added thumbnail batch
+tiles, individual downloads, and a cancellable ZIP export while preserving
+mobile image cleanup. Clarified backdrop uploads and made the developer-toggle
+state visible beside the version. Human-time estimates remain pending review;
+this entry does not add counted VBs.

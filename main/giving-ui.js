@@ -4,7 +4,7 @@ import {
 import { localStore, requestPersistence, downloadBlob } from './local-store.js'
 import { loadQrLibrary, afterPaint } from './qr-loader.js'
 import {
-  BITCOIN_ADDRESS, apiJson, btc, paymentUri, createGiftIntent,
+  BITCOIN_ADDRESS, apiJson, btc, giftUri, createGiftIntent,
   addressTransactions, matchingTransactions, manualTransaction, receiptFor,
   encodeCode, decodeCode, isSupporter, verifyCode, encodeRequest, decodeRequest,
 } from './giving.js'
@@ -40,9 +40,9 @@ export const GivingPanel = {
 
     const hasExtras = computed(() => Boolean(supporter.value || props.preview))
     const showStudio = computed(() => hasExtras.value && !givingAgain.value)
-    const showPayment = computed(() => Boolean(intent.value && !showStudio.value))
+    const showGiftDetails = computed(() => Boolean(intent.value && !showStudio.value))
     const code = computed(() => supporter.value ? encodeCode(supporter.value) : '')
-    const uri = computed(() => intent.value ? paymentUri(intent.value) : '')
+    const uri = computed(() => intent.value ? giftUri(intent.value) : '')
     const restoreLink = computed(() => {
       if (!code.value) return ''
       const url = new URL(window.location.href)
@@ -86,7 +86,9 @@ export const GivingPanel = {
           type: 'svg',
           data,
           margin: 16,
-          qrOptions: { errorCorrectionLevel: 'Q' },
+          qrOptions: { errorCorrectionLevel: 'H' },
+          image: './icons/bitcoin.svg',
+          imageOptions: { hideBackgroundDots: true, imageSize: .22, margin: 4, saveAsBlob: true },
           dotsOptions: { color: '#1c3631', type: 'rounded' },
           cornersSquareOptions: { color: '#ae5f45', type: 'extra-rounded' },
           cornersDotOptions: { color: '#1c3631', type: 'dot' },
@@ -106,17 +108,17 @@ export const GivingPanel = {
 
     function startWatching() {
       stopWatching()
-      if (!opened.value || !showPayment.value) return
-      timer = setInterval(() => checkPayment(), 20000)
+      if (!opened.value || !showGiftDetails.value) return
+      timer = setInterval(() => checkGift(), 20000)
     }
 
-    function preparePaymentView() {
+    function prepareGiftView() {
       const ticket = opening
       // Let the native dialog paint before loading QR code or doing API work.
       afterPaint(() => {
-        if (!opened.value || ticket !== opening || !showPayment.value) return
+        if (!opened.value || ticket !== opening || !showGiftDetails.value) return
         renderQr(ticket)
-        checkPayment()
+        checkGift()
         startWatching()
       })
     }
@@ -128,7 +130,7 @@ export const GivingPanel = {
       opening += 1
       dialog.value.showModal()
       dialog.value.scrollTop = 0
-      if (showPayment.value) preparePaymentView()
+      if (showGiftDetails.value) prepareGiftView()
     }
 
     function close() {
@@ -142,8 +144,8 @@ export const GivingPanel = {
     }
 
     watch(() => props.modelValue, value => value ? open() : close(), { flush: 'post' })
-    watch(showPayment, visible => {
-      if (visible && opened.value) preparePaymentView()
+    watch(showGiftDetails, visible => {
+      if (visible && opened.value) prepareGiftView()
       else stopWatching()
     }, { flush: 'post' })
 
@@ -170,7 +172,7 @@ export const GivingPanel = {
       }
     }
 
-    async function acceptPayment(tx) {
+    async function acceptGift(tx) {
       const value = receiptFor(intent.value, tx)
       await saveSupporter(value)
       await localStore.put('settings', { id: 'last-gift', receipt: value })
@@ -182,8 +184,8 @@ export const GivingPanel = {
       notice.value = 'Gift received. Thank you for supporting Cutout.'
     }
 
-    async function checkPayment(manual = false) {
-      if (!opened.value || !showPayment.value || checking.value || working.value) return
+    async function checkGift(manual = false) {
+      if (!opened.value || !showGiftDetails.value || checking.value || working.value) return
       if (document.visibilityState === 'hidden') return
       checking.value = true
       if (manual) issue.value = ''
@@ -202,14 +204,14 @@ export const GivingPanel = {
           if (!match) throw new Error('This transaction does not match a new gift to Cutout.')
         } else {
           const matches = matchingTransactions(current, await addressTransactions())
-          if (matches.length > 1) throw new Error('Please add your transaction ID under Payment help so we can identify your gift.')
+          if (matches.length > 1) throw new Error('Please add your transaction ID under Bitcoin details so we can identify your gift.')
           match = matches[0]
         }
 
         if (intent.value !== current) return
-        if (match) await acceptPayment(match)
+        if (match) await acceptGift(match)
         else if (Date.now() > current.expiresAt) {
-          notice.value = 'Already paid? We’re still watching. Otherwise, update the amount under Payment help.'
+          notice.value = 'Already sent your gift? We’re still watching. Otherwise, update the amount under Bitcoin details.'
         } else if (manual) {
           notice.value = 'Not seen yet. We’ll keep checking while this window is open.'
         }
@@ -330,7 +332,7 @@ export const GivingPanel = {
     }
 
     function visibilityChanged() {
-      if (opened.value && document.visibilityState === 'visible') checkPayment()
+      if (opened.value && document.visibilityState === 'visible') checkGift()
     }
 
     onMounted(async () => {
@@ -372,9 +374,9 @@ export const GivingPanel = {
     return {
       dialog, qr, opened, amount, customAmount, intent, receipt, supporter,
       givingAgain, restoring, working, checking, notice, issue, restore, txid,
-      message, attachDiagnostics, drafts, hasExtras, showStudio, showPayment, code, uri, restoreLink,
+      message, attachDiagnostics, drafts, hasExtras, showStudio, showGiftDetails, code, uri, restoreLink,
       address: BITCOIN_ADDRESS, btc, open, close, chooseAmount, createRequest,
-      checkPayment, restoreCode, saveCode, copy, saveMessage, downloadDraft,
+      checkGift, restoreCode, saveCode, copy, saveMessage, downloadDraft,
       removeDraft, importFile,
     }
   },
@@ -398,21 +400,21 @@ export const GivingPanel = {
       >
         <div class="sticky top-0 z-10 h-0">
           <button
-            class="absolute top-3 right-3 grid size-11 place-items-center rounded-full bg-[#f4f5f1] text-2xl text-[#5c6e61] hover:bg-[#e9ede5]"
+            class="absolute top-3 right-3 grid size-11 place-items-center rounded-full border-0 bg-[#f4f5f1] p-0 leading-none text-[#5c6e61] hover:bg-[#e9ede5]"
             aria-label="Close giving"
             autofocus
             @click="close"
-          >×</button>
+          ><svg class="block size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
         </div>
 
         <div class="px-6 pt-8 pb-6 sm:px-8 sm:pt-9 sm:pb-8">
           <header class="pr-10">
-            <span v-if="!showPayment && !restoring" class="mb-4 grid size-11 place-items-center rounded-2xl bg-[#f6e9df] text-2xl text-clay" aria-hidden="true">♡</span>
+            <span v-if="!showGiftDetails && !restoring" class="mb-4 grid size-11 place-items-center rounded-2xl bg-[#f6e9df] text-2xl text-clay" aria-hidden="true">♡</span>
             <h2 id="giving-title" class="m-0 text-[28px] leading-tight font-semibold tracking-tight">
-              {{ restoring ? 'Opening your studio' : showStudio ? 'Your supporter studio' : showPayment ? 'Give with bitcoin' : 'Keep Cutout growing' }}
+              {{ restoring ? 'Opening your studio' : showStudio ? 'Your supporter studio' : showGiftDetails ? 'Give with bitcoin' : 'Keep Cutout growing' }}
             </h2>
             <p class="mt-3 mb-0 text-sm leading-relaxed text-muted">
-              {{ restoring ? 'Checking your saved gift…' : showStudio ? 'A few extras, with our thanks.' : showPayment ? 'Scan with your wallet, or open it on this device.' : 'A one-time gift of $10 or more helps keep this little tool open and independent.' }}
+              {{ restoring ? 'Checking your saved gift…' : showStudio ? 'A few extras, with our thanks.' : showGiftDetails ? 'Scan with your wallet, or copy the details below.' : 'A one-time gift of $10 or more helps keep this little tool open and independent.' }}
             </p>
           </header>
 
@@ -422,7 +424,7 @@ export const GivingPanel = {
 
           <div v-if="restoring" class="grid place-items-center py-12" role="status" aria-label="Restoring supporter pass"><span class="size-6 animate-spin rounded-full border-2 border-line border-t-clay"></span></div>
 
-          <section v-if="!showPayment && !showStudio && !restoring" class="mt-6" aria-label="Choose a gift">
+          <section v-if="!showGiftDetails && !showStudio && !restoring" class="mt-6" aria-label="Choose a gift">
             <ul class="m-0 grid list-none gap-3 p-0 text-sm text-[#52694f]">
               <li class="flex items-center gap-3"><span aria-hidden="true">🎨</span> Save your own backdrops</li>
               <li class="flex items-center gap-3"><span aria-hidden="true">📚</span> Process a batch of photos</li>
@@ -461,13 +463,13 @@ export const GivingPanel = {
             <p class="mt-3 mb-0 text-center text-xs text-[#85917e]">No subscription. Your photos stay private.</p>
           </section>
 
-          <section v-if="showPayment" class="mt-5" aria-label="Bitcoin payment">
+          <section v-if="showGiftDetails" class="mt-5" aria-label="Bitcoin gift">
             <div class="mx-auto w-52 max-w-full sm:w-60 rounded-2xl border border-[#edf0e7] bg-white">
               <div
                 ref="qr"
                 class="aspect-square [&_svg]:block [&_svg]:h-auto [&_svg]:max-w-full"
                 role="img"
-                aria-label="Bitcoin payment QR code"
+                aria-label="Bitcoin gift QR code"
               ></div>
             </div>
             <div class="mt-4 text-center">
@@ -480,40 +482,40 @@ export const GivingPanel = {
                 {{ intent.sats.toLocaleString() }} sats · About \${{ (intent.sats * intent.rate / 1e8).toFixed(2) }} USD
               </p>
             </div>
-            <a
-              class="mt-5 flex min-h-12 items-center justify-center rounded-xl bg-forest px-4 text-sm font-semibold text-white no-underline"
-              :href="uri"
-            >Open bitcoin wallet</a>
-            <button
-              class="mt-2 min-h-12 w-full rounded-xl border border-line bg-white px-4 text-sm font-semibold"
-              @click="copy(address, 'Bitcoin address')"
-            >Copy bitcoin address</button>
+            <div class="mt-5 rounded-2xl border border-line bg-paper p-4">
+              <label class="block text-xs font-semibold" for="gift-address">Bitcoin address</label>
+              <textarea id="gift-address" :value="address" readonly rows="3" spellcheck="false" class="mt-2 block w-full resize-none rounded-lg border border-line bg-white p-3 font-mono text-[11px] leading-relaxed break-all" @focus="$event.target.select()"></textarea>
+              <p class="mt-2 mb-0 text-xs leading-relaxed text-muted">Copies just the address. Enter the exact BTC amount above in your wallet.</p>
+              <button class="mt-3 min-h-11 w-full rounded-xl bg-forest px-4 text-xs font-semibold text-white" @click="copy(address, 'Bitcoin address')">Copy address</button>
+              <details class="mt-3 border-t border-line pt-3">
+                <summary class="min-h-8 cursor-pointer text-xs font-semibold">Address + amount + note</summary>
+                <p class="mt-2 text-xs leading-relaxed text-muted">Includes the BTC amount above and the note “Supporting Cutout”. For wallets that accept bitcoin links; some wallets only accept a plain address.</p>
+                <textarea :value="uri" aria-label="Full bitcoin gift details to copy" readonly rows="5" spellcheck="false" class="block w-full resize-none rounded-lg border border-line bg-white p-3 font-mono text-[11px] leading-relaxed break-all" @focus="$event.target.select()"></textarea>
+                <button class="mt-3 min-h-11 w-full rounded-xl border border-line bg-white px-3 text-xs font-semibold" @click="copy(uri, 'Bitcoin details')">Copy address + amount + note</button>
+              </details>
+            </div>
             <p class="mt-3 mb-0 text-center text-xs leading-relaxed text-[#85917e]">
               Send the exact amount shown. Network fees are separate.<br>Bitcoin on-chain only.
             </p>
             <div class="mt-5 flex items-center gap-2 text-xs text-[#60745a]" role="status">
               <span class="size-1.5 rounded-full bg-[#73a480]"></span>
               {{ checking ? 'Checking your gift…' : 'Waiting for your gift' }}
-              <button class="ml-auto min-h-11 px-2 font-semibold text-clay" :disabled="checking || working" @click="checkPayment(true)">Check now</button>
+              <button class="ml-auto min-h-11 px-2 font-semibold text-clay" :disabled="checking || working" @click="checkGift(true)">Check now</button>
             </div>
 
             <details class="mt-2 border-t border-[#edf0e7] pt-4 text-xs">
-              <summary class="min-h-8 cursor-pointer font-medium text-muted">Payment help</summary>
-              <label class="mt-3 block text-muted">
-                Bitcoin address
-                <textarea :value="address" readonly rows="2" class="mt-2 w-full resize-none rounded-lg border border-line p-3 font-mono text-[11px] break-all" @focus="$event.target.select()"></textarea>
-              </label>
+              <summary class="min-h-8 cursor-pointer font-medium text-muted">Bitcoin details</summary>
               <label class="mt-4 block text-muted">
                 Transaction ID from your wallet
                 <input v-model="txid" spellcheck="false" autocapitalize="off" class="mt-2 min-h-11 w-full rounded-lg border border-line px-3 text-xs" placeholder="Optional · 64 characters">
               </label>
-              <button class="mt-2 min-h-11 font-semibold text-clay" :disabled="checking || working" @click="checkPayment(true)">Check transaction</button>
+              <button class="mt-2 min-h-11 font-semibold text-clay" :disabled="checking || working" @click="checkGift(true)">Check transaction</button>
               <p class="my-3 leading-relaxed text-[#85917e]">Your wallet changed the amount? Add its transaction ID above. We’ll check the actual gift.</p>
               <label class="block text-muted">New gift amount · USD
                 <input v-model="amount" type="number" min="10" max="10000" class="mt-2 min-h-11 w-full rounded-lg border border-line px-3">
               </label>
-              <button class="mt-2 min-h-11 font-semibold text-clay" :disabled="checking || working" @click="createRequest">I haven’t paid · update amount</button>
-              <p class="mb-0 leading-relaxed text-[#85917e]">Already paid? Keep this request. The price is held for 30 minutes; a delayed gift can still be recognized.</p>
+              <button class="mt-2 min-h-11 font-semibold text-clay" :disabled="checking || working" @click="createRequest">Update gift amount</button>
+              <p class="mb-0 leading-relaxed text-[#85917e]">Already sent your gift? Keep this request. The price is held for 30 minutes; a delayed gift can still be recognized.</p>
             </details>
           </section>
 
@@ -566,10 +568,10 @@ export const GivingPanel = {
           </details>
 
           <button v-if="showStudio" class="mt-5 min-h-11 w-full text-xs font-semibold text-clay" @click="givingAgain = true">Give again</button>
-          <button v-if="givingAgain && hasExtras && !showPayment" class="mt-2 min-h-11 w-full text-xs text-muted" @click="givingAgain = false">Back to my studio</button>
+          <button v-if="givingAgain && hasExtras && !showGiftDetails" class="mt-2 min-h-11 w-full text-xs text-muted" @click="givingAgain = false">Back to my studio</button>
           <p v-if="notice" class="mt-4 mb-0 rounded-xl bg-sage px-3 py-2 text-xs leading-relaxed text-sage-ink" role="status">{{ notice }}</p>
           <p v-if="issue" class="mt-4 mb-0 rounded-xl bg-red-50 px-3 py-2 text-xs leading-relaxed text-red-800" role="alert">{{ issue }}</p>
-          <p v-if="showPayment" class="mt-3 mb-0 text-center text-[10px] leading-relaxed text-[#85917e]">Your extras open automatically when we see your gift.</p>
+          <p v-if="showGiftDetails" class="mt-3 mb-0 text-center text-[10px] leading-relaxed text-[#85917e]">Your extras open automatically when we see your gift.</p>
         </div>
       </dialog>
     </Teleport>
