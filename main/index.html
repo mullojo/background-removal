@@ -27,6 +27,16 @@
   </style>
 </head>
 <body>
+  <section id="startup-status" hidden style="box-sizing:border-box;width:calc(100% - 32px);max-width:380px;margin:15vh auto;padding:28px;background:#fff;border:1px solid #dce2d6;border-radius:24px;color:#1c3631;font:15px/1.6 system-ui,sans-serif" aria-live="polite">
+    <h1 id="startup-title" style="margin:0;font-size:24px">Opening Cutout…</h1>
+    <p id="startup-message">Preparing your private photo studio.</p>
+    <button id="startup-retry" type="button" style="min-height:44px;padding:10px 20px;border:0;border-radius:24px;background:#1c3631;color:#fff;font:inherit;cursor:pointer">Try again</button>
+    <details id="startup-details" hidden style="margin-top:16px">
+      <summary>Startup details</summary>
+      <textarea id="startup-report" readonly aria-label="Startup diagnostic report" rows="8" style="box-sizing:border-box;width:100%;margin-top:12px;padding:12px;border:1px solid #dce2d6;border-radius:12px;font:11px/1.6 monospace"></textarea>
+    </details>
+  </section>
+  <noscript><p style="padding:24px;font-family:system-ui">Cutout needs JavaScript to run privately in your browser. Enable it in Safari settings and reload.</p></noscript>
   <div id="app" v-cloak></div>
   <template id="app-template">
   <div class="app-shell">
@@ -299,6 +309,6 @@
     </main>
   </div>
   </template>
-  <script type="module" src="./app.js"></script>
+  <script src="./startup.js"></script>
 </body>
 </html>

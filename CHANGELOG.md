@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.5.1 — 2026-10-14
+
+- Guard IndexedDB property access so blocked browser storage cannot abort module
+  initialization and hide the free studio. Local extras report storage errors.
+- Add a framework-independent startup loader with a waiting state, retry, and
+  selectable diagnostics for failed imports or rendering instead of a blank page.
+- Cache the loader in the PWA shell. Preserve local photos, presets, gift records,
+  model caches, and the existing image/worker memory lifecycle.
+- Cover throwing storage access, failed imports/rendering, slow startup, and
+  successful mounting. The reported physical iOS Safari failure remains subject
+  to device retesting; its exact cause was not available during implementation.
+
 ## 1.5.0 — 2026-10-14
 
 - Replace font heart glyphs with a consistent symmetric outline SVG in giving.

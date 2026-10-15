@@ -181,3 +181,31 @@ controlled mask completed a two-photo Sage batch, retained correctly sized shelf
 thumbnails (192 px and 240 px), and showed 0.0 MB of tracked workspace buffers
 after cleanup. The fixture does not load the inference model or simulate native
 GPU/process memory pressure; retest actual large photos on the physical phone.
+
+## Blank startup investigation · v1.5.1
+
+A report of a beige-only page in iOS Safari, while Mac Safari and iOS Chrome
+opened normally, prompted a startup audit. The live app reported v1.5.0. No
+physical-device console output was available, so the precise cause is unconfirmed.
+
+One reproducible failure path was reading `globalThis.indexedDB` as a default
+argument during module initialization: a throwing getter aborted all imports
+before Vue mounted. The root stayed hidden by `v-cloak`, leaving the background.
+This access is now guarded; blocked storage produces a local-feature notice
+while the main studio remains usable.
+
+A classic startup loader now displays a waiting state if loading is slow and a
+readable failure card with selectable startup details if imports or mounting
+fail. Reports omit URL fragments, keeping supporter codes out of startup
+diagnostics. Retry reloads normally; it does not delete storage or model caches.
+
+For the actual Safari report, compare a fresh Private tab and record the iOS
+version. If only the existing Safari session fails, investigate that session's
+cache/site data and extensions. If the new failure card appears, copy its startup
+details. An older cached shell may need an online reload before receiving the
+new loader. Native process termination cannot be caught by page JavaScript.
+
+Verification: 36 Node checks pass. In an isolated browser preview, a deliberately
+throwing IndexedDB getter still allowed the complete studio to mount, while a
+missing app module displayed the retry/diagnostic card. This confirms those
+specific startup paths; it does not reproduce the user's physical Safari session.

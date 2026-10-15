@@ -1,7 +1,15 @@
 // Durable local data. No account, photo, preset, or message is uploaded.
-export function createLocalStore(factory = globalThis.indexedDB) {
+export function createLocalStore(factory) {
+  let storageError
+  // Some privacy/storage settings can throw even when reading this property.
+  // Optional local features must never prevent the photo studio from mounting.
+  if (factory === undefined) {
+    try { factory = globalThis.indexedDB }
+    catch { storageError = new Error('Local storage is blocked in this browser. Photo processing still works; saved extras need browser storage.') }
+  }
   let opening
   function open() {
+    if (storageError) return Promise.reject(storageError)
     if (!factory) return Promise.reject(new Error('Local storage is unavailable. Enable browser storage to use supporter features.'))
     if (!opening) opening = new Promise((resolve, reject) => {
       const request = factory.open('cutout-local', 1)

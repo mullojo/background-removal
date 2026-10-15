@@ -231,3 +231,10 @@ important. Included in the October 14 allocation.
 
 Prepared at Bob's end-of-day request on October 14, 2026. Future changes should
 add a new period or an explicit adjustment, rather than recounting these releases.
+
+### Follow-up · v1.5.1 startup investigation
+
+Investigated the iOS Safari blank-page report, guarded optional storage access,
+and added visible startup diagnostics and retry. Included as follow-up testing
+and reliability work within the rounded end-of-day allocation; the ledger
+remains **26 VBs / $2,600**. Physical-device cause confirmation is pending.
