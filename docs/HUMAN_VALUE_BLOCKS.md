@@ -238,3 +238,10 @@ Investigated the iOS Safari blank-page report, guarded optional storage access,
 and added visible startup diagnostics and retry. Included as follow-up testing
 and reliability work within the rounded end-of-day allocation; the ledger
 remains **26 VBs / $2,600**. Physical-device cause confirmation is pending.
+
+### Follow-up · v1.5.2 project presentation
+
+Added Bob's new studio screenshot to the GitHub README, made voluntary giving
+more visible, separated the main app from the model lab, and linked the app back
+to its repository. Included within the rounded end-of-day project-records
+allocation; the working total remains **26 VBs / $2,600**.

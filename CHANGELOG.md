@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.5.2 — 2026-10-14
+
+- Add a touch-friendly GitHub repository link to the app footer.
+- Refresh the main README with Bob's new studio screenshot, a prominent voluntary
+  gift-support invitation, Bitcoin address, and current human-value baseline.
+- Separate the everyday Cutout app links from the experimental model lab links.
+
 ## 1.5.1 — 2026-10-14
 
 - Guard IndexedDB property access so blocked browser storage cannot abort module

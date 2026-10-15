@@ -305,7 +305,13 @@
           {{ supporter ? 'Message' : 'Give $10 or more' }}
         </button>
       </section>
-      <footer class="page-footer"><span>Made for simple, private image making.</span><span>v{{ APP_VERSION }} · POWERED BY TRANSFORMERS.JS + ORMBG</span></footer>
+      <footer class="page-footer">
+        <span>Made for simple, private image making.</span>
+        <div class="flex flex-wrap items-center gap-x-5 gap-y-1">
+          <a href="https://github.com/mullojo/background-removal" target="_blank" rel="noopener noreferrer" class="inline-flex min-h-11 items-center gap-1 text-xs font-medium text-muted underline-offset-4 hover:text-forest hover:underline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-clay">GitHub <span aria-hidden="true">↗</span></a>
+          <span>v{{ APP_VERSION }} · POWERED BY TRANSFORMERS.JS + ORMBG</span>
+        </div>
+      </footer>
     </main>
   </div>
   </template>

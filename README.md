@@ -1,14 +1,49 @@
-# Background removal
+# Cutout · Private background removal
 
-A local browser tool for removing the background from a photo, previewing a transparent, solid-color, or gradient backdrop, and downloading a full-resolution PNG. The photo is processed in your browser. The interface uses Vue 3 and Tailwind CSS 4; inference runs in a Web Worker through Transformers.js.
+Remove a photo’s background, choose a fresh backdrop, and download a
+full-resolution PNG—all in your browser. Your photo stays on your device.
+Cutout is an open source, gift-supported studio built with Vue, Tailwind CSS,
+and Transformers.js.
 
-**[Try the live app](https://background-removal.pages.dev/)** · **[Explore the model lab](https://background-removal-lab.pages.dev/)** — hosted on Cloudflare Pages.
+**[Open Cutout →](https://background-removal.pages.dev/)** · [Support the project ♡](#support-cutout)
 
-This folder can stand alone now and can later sit inside a larger collection of photo and video tools. It contains only the photo background-removal project.
+![Cutout v1.5.0 showing its photo workspace, ready model, backdrop choices, and Support Cutout button](docs/images/cutout-studio-v1.5.png)
 
-![Cutout with its upload canvas, loaded model, and backdrop choices](docs/images/cutout-studio.png)
+*Screenshot supplied by Bob · Cutout v1.5.0, with no personal photo loaded.*
 
-*Screenshot supplied by the project owner, with the model ready and no personal photo loaded.*
+## Support Cutout
+
+If Cutout saves you time or helps you make something, please consider giving
+back. Your gifts support continued development, mobile testing, and the care
+that keeps this tool useful and open source. Single-photo editing stays free.
+
+**[Open Cutout and choose “Support Cutout” →](https://background-removal.pages.dev/)**
+
+Give with bitcoin by scanning the QR or copying the address in the app. Gifts
+of **$10 USD or more** recognized through the app open saved brand backdrops,
+batch processing, individual/shared batch finishes, and a local message notebook.
+Notes stay on your device while message delivery is being built.
+
+Cutout’s Bitcoin address:
+
+```text
+bc1q4009vd4j005r5hk5mlry29xu8j6yatv9k0mgp6fstl974zue04dq9e6zlx
+```
+
+We’ve recorded **26 human value blocks / $2,600** of contributed work toward our
+voluntary gift-support baseline. Explore the [human value-block record](docs/HUMAN_VALUE_BLOCKS.md)
+and the [giving guide](docs/GIVING.md). Gifts are voluntary, and the source remains
+available under the [MIT License](LICENSE).
+
+## Model lab · Experiments and comparisons
+
+The lab is a separate workbench for exploring background-removal models,
+quality, speed, and WebGPU/WASM behavior.
+
+**[Open the model lab →](https://background-removal-lab.pages.dev/)** · [Lab documentation](lab/README.md)
+
+For everyday photo editing, use [Cutout](https://background-removal.pages.dev/).
+Both sites are hosted on Cloudflare Pages.
 
 ## Install or reuse
 
