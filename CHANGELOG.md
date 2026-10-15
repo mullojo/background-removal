@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.5.3 — 2026-10-14
+
+- Disable iOS telephone format detection and move the phone-like byte divisor out
+  of the in-DOM Vue template. Safari-injected links inside an expression produce
+  the reported Unexpected token '<' compiler failure; use the JS formatter instead.
+- Reproduce that failure with the bundled Vue compiler and simulated telephone
+  links, then verify the complete corrected template compiles without long numeric
+  expressions. Physical iPhone confirmation is still required.
+- Defer Tailwind's browser script so downloading it does not block fallback HTML.
+- Add an independent online app-file recovery route for stale-shell sessions.
+  Refresh only the exact app scope's shell cache and registration; preserve saved
+  records and model downloads. Verify connectivity before changing offline files.
+
 ## 1.5.2 — 2026-10-14
 
 - Add a touch-friendly GitHub repository link to the app footer.

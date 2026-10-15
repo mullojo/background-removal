@@ -88,6 +88,12 @@ Live Server serves the files without a build step. These apps use CDN libraries 
 
 The model downloads are stored in the browser Cache Storage for the exact site origin. Both apps show the model cache and provide a clear button. If you serve both paths on the same host and port, they share that origin's model cache.
 
+### Trouble opening the app in Safari?
+
+If Cutout stays blank, open the separate [app recovery page](https://background-removal.pages.dev/recover.html)
+and choose **Refresh app files** while online. It refreshes the installed interface
+while keeping saved photos, backdrops, supporter access, and downloaded models.
+
 ## Versions and releases
 
 `VERSION` is the authoritative semantic version, beginning at **v1.0.0**. The app

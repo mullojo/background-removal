@@ -209,3 +209,50 @@ Verification: 36 Node checks pass. In an isolated browser preview, a deliberatel
 throwing IndexedDB getter still allowed the complete studio to mount, while a
 missing app module displayed the retry/diagnostic card. This confirms those
 specific startup paths; it does not reproduce the user's physical Safari session.
+
+## Safari template compilation and recovery · v1.5.3
+
+Live inspection of https://background-removal.pages.dev/ first rendered cached
+v1.1.0, then automatically reloaded into v1.5.1. The updated app rendered without
+startup errors in that browser. This confirms stale shells exist in real sessions;
+it does not establish the exact cause of the physical iOS Safari report.
+
+A cached shell that cannot initialize its JavaScript may not reach the app's
+update activation logic or the new startup loader. Use **recover.html**, a separate
+online page with no Vue, Tailwind, app imports, or storage initialization. Its
+button verifies a fresh recovery-page response, unregisters only the exact app
+scope, removes only `cutout-shell:<scope>:` caches, and reopens the studio. It
+does not touch IndexedDB, `transformers-cache`, or other scopes. Recovery files
+are intentionally not precached, letting older shell workers pass them through.
+
+The Tailwind browser script is also deferred: its network loading no longer
+blocks the parser before the fallback HTML and startup script are reached.
+This removes one possible reason a new startup card would never appear. It does
+not prove Tailwind caused the reported issue or catch native process termination.
+
+After deploying v1.5.3, test https://background-removal.pages.dev/recover.html in
+the affected Safari session, choose Refresh app files, and check the displayed
+version after returning. If recovery itself fails, copy Recovery details. If
+the app remains beige without a startup card, record the iOS version and obtain
+a Safari remote console/network trace to distinguish script blocking, cache
+issues, and a native process crash. Do not clear all website data: that would
+remove the user's local studio records.
+
+The user's startup report subsequently narrowed the failure: `Unexpected token
+'<'` in Vue's native `Function` call during `app.js` mounting. This points to
+template-generated JavaScript, rather than an app-module download or the storage
+guard. The template contained `{{ (output.bytes / 1048576).toFixed(1) }}`. iOS
+telephone detection can inject an `<a href="tel:…">` into numeric DOM text; inside
+a Vue expression that yields invalid JavaScript.
+
+The page now declares `<meta name="format-detection" content="telephone=no">`,
+and that expression uses `memoryMB(output.bytes)` so its long numeric literal
+lives only in JavaScript. A test with the actual bundled Vue compiler reproduces
+the reported syntax error by inserting a telephone link in the former expression.
+The full corrected template compiles and contains no long numeric literals in
+interpolations. This is a closely matching reproduction; the actual mutated
+iPhone DOM has not been inspected, so device retesting is still needed.
+
+Sources: [Apple telephone format detection](https://developer.apple.com/library/archive/documentation/AppleApplications/Reference/SafariHTMLRef/Articles/MetaTags.html),
+[WebKit format-detection mutation report](https://bugs.webkit.org/show_bug.cgi?id=232856),
+and [Vue's in-DOM template considerations](https://vuejs.org/guide/essentials/template-syntax.html).

@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
+  <meta name="format-detection" content="telephone=no" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="theme-color" content="#f5f5f2" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -12,7 +13,7 @@
   <link rel="apple-touch-icon" sizes="180x180" href="./icons/apple-touch-icon.png" />
   <title>Cutout — Background removal studio</title>
   <meta name="description" content="Remove photo backgrounds privately in your browser, then export with a color or gradient." />
-  <script src="./vendor/tailwind-browser-4.3.3.js"></script>
+  <script src="./vendor/tailwind-browser-4.3.3.js" defer></script>
   <link rel="stylesheet" href="./style.css" />
   <style type="text/tailwindcss">
     @theme {
@@ -31,6 +32,7 @@
     <h1 id="startup-title" style="margin:0;font-size:24px">Opening Cutout…</h1>
     <p id="startup-message">Preparing your private photo studio.</p>
     <button id="startup-retry" type="button" style="min-height:44px;padding:10px 20px;border:0;border-radius:24px;background:#1c3631;color:#fff;font:inherit;cursor:pointer">Try again</button>
+    <p><a href="./recover.html" style="display:inline-flex;align-items:center;min-height:44px;color:#ae5f45">Refresh app files</a></p>
     <details id="startup-details" hidden style="margin-top:16px">
       <summary>Startup details</summary>
       <textarea id="startup-report" readonly aria-label="Startup diagnostic report" rows="8" style="box-sizing:border-box;width:100%;margin-top:12px;padding:12px;border:1px solid #dce2d6;border-radius:12px;font:11px/1.6 monospace"></textarea>
@@ -155,7 +157,7 @@
                   </button>
                   <div class="p-2.5">
                     <p class="m-0 truncate text-[11px] font-medium" :title="output.name">{{ output.name }}</p>
-                    <small class="mt-1 block text-[10px] text-muted">{{ (output.bytes / 1048576).toFixed(1) }} MB</small>
+                    <small class="mt-1 block text-[10px] text-muted">{{ memoryMB(output.bytes) }}</small>
                     <button v-if="output.editable" class="mt-1 flex min-h-11 w-full items-center justify-between gap-1 rounded-lg text-left text-[10px] text-clay" :disabled="busy || shareBusy || batchRunning || archiveBusy || presetSaving || finishingBusy" :aria-expanded="selectedOutputId === output.id" @click="selectOutput(output.id)"><span class="truncate">{{ output.backdropName || 'Transparent' }}</span><span class="shrink-0 font-semibold">Finish {{ selectedOutputId === output.id ? '−' : '+' }}</span></button>
                     <p v-else class="mt-2 mb-0 text-[10px] leading-relaxed text-muted">Reprocess to change the finish.</p>
                     <div v-if="selectedOutputId === output.id" class="mt-1 grid grid-cols-2 gap-1 rounded-xl bg-paper p-1 sm:grid-cols-3" role="group" :aria-label="'Background for ' + output.name">

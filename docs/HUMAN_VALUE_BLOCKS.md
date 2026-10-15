@@ -245,3 +245,11 @@ Added Bob's new studio screenshot to the GitHub README, made voluntary giving
 more visible, separated the main app from the model lab, and linked the app back
 to its repository. Included within the rounded end-of-day project-records
 allocation; the working total remains **26 VBs / $2,600**.
+
+### Follow-up · v1.5.3 Safari recovery
+
+Used the iPhone startup trace to narrow a Vue template compilation failure,
+removed detector-sensitive numeric markup, and disabled telephone auto-linking.
+Added compiler regression coverage, a safe interface refresh route, and deferred
+Tailwind loading. Continued within the rounded testing/reliability allocation; the ledger
+remains **26 VBs / $2,600** pending any later end-of-day adjustment.

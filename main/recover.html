@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en" data-cutout-recovery>
+<head>
+  <meta charset="utf-8">
+  <meta name="format-detection" content="telephone=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f5f5f2">
+  <title>Reopen Cutout</title>
+  <style>
+    * { box-sizing: border-box }
+    body { margin: 0; background: #f5f5f2; color: #1c3631; font: 15px/1.65 system-ui, sans-serif }
+    main { width: calc(100% - 32px); max-width: 420px; margin: 12vh auto; padding: 28px; background: white; border: 1px solid #dce2d6; border-radius: 24px }
+    h1 { margin: 0; font-size: 26px; line-height: 1.2; letter-spacing: -.5px }
+    p { color: #65766c }
+    button { width: 100%; min-height: 48px; border: 0; border-radius: 24px; background: #1c3631; color: white; font: 600 14px system-ui; cursor: pointer }
+    button:disabled { opacity: .65; cursor: wait }
+    a { display: inline-flex; align-items: center; min-height: 44px; color: #ae5f45 }
+    small { display: block; margin: 16px 0; color: #65766c; line-height: 1.6 }
+    textarea { width: 100%; margin-top: 12px; padding: 12px; border: 1px solid #dce2d6; border-radius: 12px; font: 11px/1.5 monospace }
+    [hidden] { display: none }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Let’s reopen Cutout</h1>
+    <p>If the studio won’t open, refresh its saved app files and try a fresh start.</p>
+    <button id="recover-button" type="button">Refresh app files</button>
+    <small>Your saved photos, backdrops, supporter access, and downloaded models are kept. Connect to the internet first.</small>
+    <p id="recover-status" role="status" hidden></p>
+    <details id="recover-details" hidden>
+      <summary>Recovery details</summary>
+      <textarea id="recover-report" readonly rows="6" aria-label="Recovery diagnostic report"></textarea>
+    </details>
+    <a href="./">Back to Cutout</a>
+    <noscript><p>Enable JavaScript in Safari to refresh the app files.</p></noscript>
+  </main>
+  <script src="./recovery.js"></script>
+</body>
+</html>
