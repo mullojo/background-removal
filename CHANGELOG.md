@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.4.0 — 2026-10-14
+
+- Integrate Bitcoin copying into one segmented address/details control with one
+  visible value and copy action. Style the QR with orange dots and round corners,
+  and use the established Cryptocurrency Icons Bitcoin SVG (CC0).
+- Lead returning supporters to Message, with a prominent Give again action in
+  the message modal. Notes remain local while message delivery is being built.
+- Retain transparent sources for new batch photos. Apply a backdrop to the whole
+  shelf or tap a tile to change that photo, including saved image/gradient presets.
+  Update thumbnails, names, individual downloads, and ZIP contents automatically.
+- Finish sequentially without inference; release bitmap/canvas resources, support
+  pausing, count sources toward local storage limits, preserve exports on failed
+  writes, and defer PWA updates during finishing. Older flattened outputs need
+  reprocessing before their background can change.
+- Add coverage for single/all edits, each backdrop type, failed writes, cleanup,
+  copy-format switching, and the finishing update guard.
+
 ## 1.3.0 — 2026-10-14
 
 - Replace wallet launching with visible address copying and expandable address,

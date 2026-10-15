@@ -9,6 +9,7 @@ The stable no-build Cutout app, with these editable implementation files:
 - `app.js` — Vue 3 application state and image export
 - `giving.js` and `giving-ui.js` — Bitcoin requests, portable codes, and giving/message UI
 - `supporter-studio.js` — saved brand backdrops and sequential batch processing
+- `batch-finish.js` — sequential saved-cutout finishing without inference
 - `qr-loader.js` — QR runtime loaded only for a gift
 - `developer-preview.js` — temporary, session-only extras preview (seven version taps)
 - `local-store.js` — IndexedDB storage and local downloads
@@ -95,3 +96,8 @@ events to check that cleanup happened before export and the next run.
 Use the repository's [versioning workflow](../docs/VERSIONING.md): bump with
 `node scripts/release.mjs patch|minor|major`, complete CHANGELOG.md, check, commit,
 and push. `VERSION` drives the app, shell cache, and GitHub release tag.
+
+Batch thumbnails open individual finish choices; the shelf toolbar applies a
+backdrop to all editable photos. Sources are retained for new batches; old opaque
+exports need reprocessing. Returning supporters use Message to open their notes.
+See [icon sources](icons/README.md) for the bundled Bitcoin SVG.

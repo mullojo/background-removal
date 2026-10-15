@@ -154,6 +154,10 @@ test('pending gifts expose no code and QR/payment work waits until after the dia
   const panel = context.GivingPanel.setup(props, { emit() {} })
   panel.dialog.value = { showModal() { sequence.push('dialog') }, close() {} }
   panel.intent.value = { sats: 10008, rate: 100000, baseline: [], createdAt: now }
+  assert.equal(panel.copyValue.value, context.BITCOIN_ADDRESS)
+  panel.copyMode.value = 'details'
+  assert.equal(panel.copyValue.value, context.giftUri(panel.intent.value))
+  panel.copyMode.value = 'address'
   panel.open()
   assert.deepEqual(sequence, ['dialog'])
   assert.equal(frames.length, 1)
@@ -166,6 +170,11 @@ test('pending gifts expose no code and QR/payment work waits until after the dia
   panel.supporter.value = { v: 1, sats: 10008, rate: 100000, createdAt: now, txid: id('a') }
   assert.match(panel.code.value, /^CUTOUT1\./)
   assert.match(panel.restoreLink.value, /#supporter=CUTOUT1\./)
+  panel.givingAgain.value = true
+  panel.open()
+  panel.close()
+  assert.equal(panel.showStudio.value, true, 'Reopening leads a returning supporter to their message')
+  assert.equal(panel.intent.value.sats, 10008, 'Returning to messages preserves the pending gift')
 })
 
 test('hidden developer preview uses session storage and can be switched off without changing real gifts', () => {

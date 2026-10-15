@@ -90,11 +90,20 @@ createApp({
     })
 
     const studio = useSupporterStudio({
-      isBusy: () => busy.value || shareBusy.value || studio.batchRunning.value || studio.presetSaving.value || studio.archiveBusy.value,
+      isBusy: () => busy.value || shareBusy.value || studio.batchRunning.value || studio.presetSaving.value || studio.archiveBusy.value || studio.finishingBusy.value,
       processFile: file => new Promise(resolve => { batchCompletion = resolve; acceptFile(file, preferWasm.value, true).catch(fail) }),
       clearPhoto: () => clearImage(true),
       getOutput: () => exportFile,
       getThumbnail: () => exportThumbnail,
+      getCutout: () => cutoutBlob,
+      getChoice: () => currentChoice.value,
+      getChoices: () => choices.value,
+      beforeFinish: () => {
+        if (canRetry.value) throw new Error('Clear the photo in your workspace before finishing saved photos.')
+        stopWorker('batch-finishing')
+        modelLoaded.value = false
+        phase.value = 'idle'
+      },
       onPresets: presets => {
         choices.value = [...baseChoices, ...(studio.supporter.value ? presets : [])]
         if (!choices.value.some(choice => choice.id === selected.value)) selectBackground('transparent')
@@ -102,7 +111,7 @@ createApp({
       onError: cause => diagnostics.record('batch-storage-error', errorDetails(cause)),
     })
     const developer = useDeveloperPreview({
-      isBusy: () => (busy.value && canRetry.value) || shareBusy.value || studio.batchRunning.value || studio.presetSaving.value || studio.archiveBusy.value,
+      isBusy: () => (busy.value && canRetry.value) || shareBusy.value || studio.batchRunning.value || studio.presetSaving.value || studio.archiveBusy.value || studio.finishingBusy.value,
       onChange: refreshSupporterAccess,
     })
 
@@ -390,7 +399,7 @@ createApp({
     }
 
     function clearImage(fromBatch = false) {
-      if (busy.value || shareBusy.value || (!fromBatch && (studio.batchRunning.value || studio.archiveBusy.value))) return
+      if (busy.value || shareBusy.value || (!fromBatch && (studio.batchRunning.value || studio.archiveBusy.value || studio.finishingBusy.value))) return
       requestId += 1
       activeRequest = null
       queuedFile = null
@@ -419,7 +428,7 @@ createApp({
     }
 
     async function acceptFile(file, forceWasm = preferWasm.value, fromBatch = false) {
-      if (!fromBatch && (studio.batchRunning.value || studio.presetSaving.value || studio.archiveBusy.value)) return
+      if (!fromBatch && (studio.batchRunning.value || studio.presetSaving.value || studio.archiveBusy.value || studio.finishingBusy.value)) return
       if (!file) return
       if (!file.type.startsWith('image/')) {
         if (!busy.value) fail(new Error('Choose a JPG, PNG, WebP, or other browser-supported image.'))
@@ -635,7 +644,7 @@ createApp({
     }
 
     function selectBackground(id) {
-      if (studio.batchRunning.value || studio.presetSaving.value || studio.archiveBusy.value) return
+      if (studio.batchRunning.value || studio.presetSaving.value || studio.archiveBusy.value || studio.finishingBusy.value) return
       selected.value = id; updateExport()
     }
 
@@ -661,7 +670,7 @@ createApp({
       mark('app-opened', { version: APP_VERSION }, false)
       refreshCache()
       pwa = createPwa({
-        isBusy: () => busy.value || shareBusy.value || studio.batchRunning.value || studio.presetSaving.value || studio.archiveBusy.value || givingOpen.value,
+        isBusy: () => busy.value || shareBusy.value || studio.batchRunning.value || studio.presetSaving.value || studio.archiveBusy.value || studio.finishingBusy.value || givingOpen.value,
         hasImage: () => canRetry.value,
         onDiagnostic: (event, details) => diagnostics.record(event, details),
         onChange: state => {

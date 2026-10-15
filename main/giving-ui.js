@@ -37,12 +37,14 @@ export const GivingPanel = {
     const message = ref('')
     const attachDiagnostics = ref(false)
     const drafts = ref([])
+    const copyMode = ref('address')
 
     const hasExtras = computed(() => Boolean(supporter.value || props.preview))
     const showStudio = computed(() => hasExtras.value && !givingAgain.value)
     const showGiftDetails = computed(() => Boolean(intent.value && !showStudio.value))
     const code = computed(() => supporter.value ? encodeCode(supporter.value) : '')
     const uri = computed(() => intent.value ? giftUri(intent.value) : '')
+    const copyValue = computed(() => copyMode.value === 'address' ? BITCOIN_ADDRESS : uri.value)
     const restoreLink = computed(() => {
       if (!code.value) return ''
       const url = new URL(window.location.href)
@@ -89,9 +91,9 @@ export const GivingPanel = {
           qrOptions: { errorCorrectionLevel: 'H' },
           image: './icons/bitcoin.svg',
           imageOptions: { hideBackgroundDots: true, imageSize: .22, margin: 4, saveAsBlob: true },
-          dotsOptions: { color: '#1c3631', type: 'rounded' },
-          cornersSquareOptions: { color: '#ae5f45', type: 'extra-rounded' },
-          cornersDotOptions: { color: '#1c3631', type: 'dot' },
+          dotsOptions: { color: '#ca6400', type: 'dots' },
+          cornersSquareOptions: { color: '#ca6400', type: 'dot' },
+          cornersDotOptions: { color: '#ca6400', type: 'dot' },
           backgroundOptions: { color: '#ffffff' },
         }).append(target)
         qrTarget = target
@@ -138,6 +140,7 @@ export const GivingPanel = {
       opened.value = false
       opening += 1
       stopWatching()
+      if (hasExtras.value) givingAgain.value = false
       dialog.value.close()
       emit('update:modelValue', false)
       previousFocus?.focus()
@@ -374,7 +377,7 @@ export const GivingPanel = {
     return {
       dialog, qr, opened, amount, customAmount, intent, receipt, supporter,
       givingAgain, restoring, working, checking, notice, issue, restore, txid,
-      message, attachDiagnostics, drafts, hasExtras, showStudio, showGiftDetails, code, uri, restoreLink,
+      message, attachDiagnostics, drafts, copyMode, copyValue, hasExtras, showStudio, showGiftDetails, code, uri, restoreLink,
       address: BITCOIN_ADDRESS, btc, open, close, chooseAmount, createRequest,
       checkGift, restoreCode, saveCode, copy, saveMessage, downloadDraft,
       removeDraft, importFile,
@@ -386,8 +389,8 @@ export const GivingPanel = {
       class="inline-flex min-h-11 items-center gap-2 rounded-full border border-[#dfc7b8] bg-[#f4e8dc] px-4 text-xs font-semibold text-[#86472f]"
       @click="$emit('update:modelValue', true)"
     >
-      <span class="text-xl" aria-hidden="true">♡</span>
-      {{ preview ? 'Preview studio' : supporter ? 'Your studio' : 'Support Cutout' }}
+      <span class="text-lg" aria-hidden="true">{{ supporter ? '💬' : '♡' }}</span>
+      {{ preview ? 'Preview studio' : supporter ? 'Message' : 'Support Cutout' }}
     </button>
 
     <Teleport to="body">
@@ -411,10 +414,10 @@ export const GivingPanel = {
           <header class="pr-10">
             <span v-if="!showGiftDetails && !restoring" class="mb-4 grid size-11 place-items-center rounded-2xl bg-[#f6e9df] text-2xl text-clay" aria-hidden="true">♡</span>
             <h2 id="giving-title" class="m-0 text-[28px] leading-tight font-semibold tracking-tight">
-              {{ restoring ? 'Opening your studio' : showStudio ? 'Your supporter studio' : showGiftDetails ? 'Give with bitcoin' : 'Keep Cutout growing' }}
+              {{ restoring ? 'Opening your studio' : showStudio ? 'Leave us a message' : showGiftDetails ? 'Give with bitcoin' : 'Keep Cutout growing' }}
             </h2>
             <p class="mt-3 mb-0 text-sm leading-relaxed text-muted">
-              {{ restoring ? 'Checking your saved gift…' : showStudio ? 'A few extras, with our thanks.' : showGiftDetails ? 'Scan with your wallet, or copy the details below.' : 'A one-time gift of $10 or more helps keep this little tool open and independent.' }}
+              {{ restoring ? 'Checking your saved gift…' : showStudio ? 'Your ideas help shape Cutout. Thank you for being here.' : showGiftDetails ? 'Scan with your wallet, or copy the details below.' : 'A one-time gift of $10 or more helps keep this little tool open and independent.' }}
             </p>
           </header>
 
@@ -464,7 +467,7 @@ export const GivingPanel = {
           </section>
 
           <section v-if="showGiftDetails" class="mt-5" aria-label="Bitcoin gift">
-            <div class="mx-auto w-52 max-w-full sm:w-60 rounded-2xl border border-[#edf0e7] bg-white">
+            <div class="mx-auto w-52 max-w-full sm:w-60 rounded-3xl border border-[#ffe0b8] bg-white shadow-[0_8px_30px_-18px_#f7931a]">
               <div
                 ref="qr"
                 class="aspect-square [&_svg]:block [&_svg]:h-auto [&_svg]:max-w-full"
@@ -482,17 +485,15 @@ export const GivingPanel = {
                 {{ intent.sats.toLocaleString() }} sats · About \${{ (intent.sats * intent.rate / 1e8).toFixed(2) }} USD
               </p>
             </div>
-            <div class="mt-5 rounded-2xl border border-line bg-paper p-4">
-              <label class="block text-xs font-semibold" for="gift-address">Bitcoin address</label>
-              <textarea id="gift-address" :value="address" readonly rows="3" spellcheck="false" class="mt-2 block w-full resize-none rounded-lg border border-line bg-white p-3 font-mono text-[11px] leading-relaxed break-all" @focus="$event.target.select()"></textarea>
-              <p class="mt-2 mb-0 text-xs leading-relaxed text-muted">Copies just the address. Enter the exact BTC amount above in your wallet.</p>
-              <button class="mt-3 min-h-11 w-full rounded-xl bg-forest px-4 text-xs font-semibold text-white" @click="copy(address, 'Bitcoin address')">Copy address</button>
-              <details class="mt-3 border-t border-line pt-3">
-                <summary class="min-h-8 cursor-pointer text-xs font-semibold">Address + amount + note</summary>
-                <p class="mt-2 text-xs leading-relaxed text-muted">Includes the BTC amount above and the note “Supporting Cutout”. For wallets that accept bitcoin links; some wallets only accept a plain address.</p>
-                <textarea :value="uri" aria-label="Full bitcoin gift details to copy" readonly rows="5" spellcheck="false" class="block w-full resize-none rounded-lg border border-line bg-white p-3 font-mono text-[11px] leading-relaxed break-all" @focus="$event.target.select()"></textarea>
-                <button class="mt-3 min-h-11 w-full rounded-xl border border-line bg-white px-3 text-xs font-semibold" @click="copy(uri, 'Bitcoin details')">Copy address + amount + note</button>
-              </details>
+            <div class="mt-5">
+              <div class="grid grid-cols-2 gap-1 rounded-full bg-[#f4f3ef] p-1" role="group" aria-label="Bitcoin copy format">
+                <button class="min-h-11 rounded-full px-3 text-xs font-semibold transition-colors" :class="copyMode === 'address' ? 'bg-white text-forest shadow-sm' : 'text-muted'" :aria-pressed="copyMode === 'address'" @click="copyMode = 'address'">Address only</button>
+                <button class="min-h-11 rounded-full px-3 text-xs font-semibold transition-colors" :class="copyMode === 'details' ? 'bg-white text-forest shadow-sm' : 'text-muted'" :aria-pressed="copyMode === 'details'" @click="copyMode = 'details'">Address + details</button>
+              </div>
+              <label class="sr-only" for="gift-copy">Bitcoin details to copy</label>
+              <textarea id="gift-copy" :value="copyValue" readonly :rows="copyMode === 'address' ? 2 : 4" spellcheck="false" class="mt-3 block w-full resize-none rounded-2xl border border-line bg-paper px-4 py-3 font-mono text-[11px] leading-relaxed break-all text-forest" @focus="$event.target.select()"></textarea>
+              <p class="mt-2 mb-0 min-h-10 text-xs leading-relaxed text-muted">{{ copyMode === 'address' ? 'Just the address. Enter the exact BTC amount above in your wallet.' : 'Includes the amount and “Supporting Cutout” note. If your wallet does not accept bitcoin links, choose Address only.' }}</p>
+              <button class="mt-3 flex min-h-12 w-full items-center justify-center gap-2 rounded-full bg-[#a94e00] px-4 text-sm font-semibold text-white hover:bg-[#923f00]" @click="copy(copyValue, copyMode === 'address' ? 'Bitcoin address' : 'Bitcoin details')"><span aria-hidden="true">⧉</span>{{ copyMode === 'address' ? 'Copy address' : 'Copy gift details' }}</button>
             </div>
             <p class="mt-3 mb-0 text-center text-xs leading-relaxed text-[#85917e]">
               Send the exact amount shown. Network fees are separate.<br>Bitcoin on-chain only.
@@ -548,7 +549,7 @@ export const GivingPanel = {
             </details>
           </section>
 
-          <details v-if="supporter" class="mt-6 border-t border-[#edf0e7] pt-4 text-xs" aria-label="Supporter pass">
+          <details v-if="supporter && showStudio" class="mt-6 border-t border-[#edf0e7] pt-4 text-xs" aria-label="Supporter pass">
             <summary class="min-h-8 cursor-pointer font-medium text-muted">Your supporter pass</summary>
             <p class="my-3 leading-relaxed text-[#85917e]">Keep a backup to open your studio on another device. Your upgrade is already saved here.</p>
             <div class="grid grid-cols-2 gap-2">
@@ -567,11 +568,11 @@ export const GivingPanel = {
             </details>
           </details>
 
-          <button v-if="showStudio" class="mt-5 min-h-11 w-full text-xs font-semibold text-clay" @click="givingAgain = true">Give again</button>
-          <button v-if="givingAgain && hasExtras && !showGiftDetails" class="mt-2 min-h-11 w-full text-xs text-muted" @click="givingAgain = false">Back to my studio</button>
+          <button v-if="showStudio" class="mt-5 flex min-h-12 w-full items-center justify-center gap-2 rounded-full border border-[#f3cfa5] bg-[#fff6e9] px-4 text-sm font-semibold text-[#a94e00] hover:bg-[#ffedcf]" @click="givingAgain = true"><span aria-hidden="true">♡</span> Give again</button>
+          <button v-if="givingAgain && hasExtras" class="mt-2 min-h-11 w-full text-xs text-muted" @click="givingAgain = false">Back to my message</button>
           <p v-if="notice" class="mt-4 mb-0 rounded-xl bg-sage px-3 py-2 text-xs leading-relaxed text-sage-ink" role="status">{{ notice }}</p>
           <p v-if="issue" class="mt-4 mb-0 rounded-xl bg-red-50 px-3 py-2 text-xs leading-relaxed text-red-800" role="alert">{{ issue }}</p>
-          <p v-if="showGiftDetails" class="mt-3 mb-0 text-center text-[10px] leading-relaxed text-[#85917e]">Your extras open automatically when we see your gift.</p>
+          <p v-if="showGiftDetails && !hasExtras" class="mt-3 mb-0 text-center text-[10px] leading-relaxed text-[#85917e]">Your extras open automatically when we see your gift.</p>
         </div>
       </dialog>
     </Teleport>

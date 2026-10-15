@@ -167,3 +167,11 @@ tiles, individual downloads, and a cancellable ZIP export while preserving
 mobile image cleanup. Clarified backdrop uploads and made the developer-toggle
 state visible beside the version. Human-time estimates remain pending review;
 this entry does not add counted VBs.
+
+### Follow-up · v1.4.0
+
+Integrated Bitcoin copying, refined the orange dotted QR and established SVG
+logo, and made messaging the primary action after giving. Added reversible
+batch finishes for all photos or one selected tile, retaining transparent sources
+and protecting phone memory. Human-time allocation remains pending review;
+these milestones do not add counted VBs yet.

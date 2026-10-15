@@ -227,6 +227,9 @@ test('offline uploads wait for connectivity and model readiness; worker failures
   app.archiveBusy.value = true
   assert.equal(pwaHooks.isBusy(), true, 'ZIP preparation must defer automatic reloads')
   app.archiveBusy.value = false
+  app.finishingBusy.value = true
+  assert.equal(pwaHooks.isBusy(), true, 'Batch finishing must defer automatic reloads')
+  app.finishingBusy.value = false
   app.setPreviewSupporter(true)
   assert.equal(app.supporter.value, true)
   assert.equal(localRecords.settings.size, 0, 'Preview must not create a real receipt')

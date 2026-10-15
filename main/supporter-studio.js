@@ -1,4 +1,5 @@
 import { ref } from './vendor/vue-3.5.43.esm-browser.prod.js'
+import { renderBatchFinish } from './batch-finish.js'
 import { createStoredZip } from './zip.js'
 import { localStore, downloadBlob, requestPersistence } from './local-store.js'
 
@@ -23,17 +24,36 @@ export function coverRect(width, height, targetWidth, targetHeight) {
   const scale = Math.max(targetWidth / width, targetHeight / height)
   return { x: (targetWidth - width * scale) / 2, y: (targetHeight - height * scale) / 2, width: width * scale, height: height * scale }
 }
-export function useSupporterStudio({ processFile, clearPhoto, getOutput, getThumbnail = () => null, isBusy, onPresets, onError }) {
+export function useSupporterStudio({
+  processFile, clearPhoto, getOutput, isBusy, onPresets, onError,
+  getThumbnail = () => null,
+  getCutout = () => null,
+  getChoice = () => ({ id: 'transparent', name: 'Transparent' }),
+  getChoices = () => [],
+  beforeFinish = () => {},
+}) {
   const supporter = ref(false), presets = ref([]), outputs = ref([]), storageNotice = ref(''), studioNotice = ref('')
   const presetName = ref(''), presetKind = ref('solid'), colorOne = ref('#b7c8b1'), colorTwo = ref('#f8d2c4'), presetImage = ref(null), presetSaving = ref(false)
   const batchInput = ref(null), batchRunning = ref(false), batchStop = ref(false), batchProgress = ref(''), batchErrors = ref([])
   const archiveBusy = ref(false), archiveProgress = ref(''), presetImageInput = ref(null)
+  const finishingBusy = ref(false), finishProgress = ref(''), finishStop = ref(false), selectedOutputId = ref(null)
   let archiveController
   let outputUrls = new Map()
   let presetUrls = []
-  function outputMetadata({ blob, thumbnail, ...item }) {
+  function transparentSource(record) {
+    if (record.cutout) return record.cutout
+    if (record.backdropId === 'transparent' || (!record.backdropId && record.name.endsWith('-transparent.png'))) return record.blob
+    return null
+  }
+  function outputMetadata(record) {
+    const { blob, cutout, thumbnail, ...item } = record
+    const previous = outputUrls.get(item.id)
     if (thumbnail) outputUrls.set(item.id, URL.createObjectURL(thumbnail))
-    return { ...item, thumbnailUrl: outputUrls.get(item.id) || '' }
+    if (previous) setTimeout(() => URL.revokeObjectURL(previous), 0)
+    return { ...item, editable: Boolean(transparentSource(record)), thumbnailUrl: outputUrls.get(item.id) || '' }
+  }
+  function shelfBytes() {
+    return outputs.value.reduce((sum, item) => sum + (item.storageBytes ?? item.bytes), 0)
   }
   async function refreshPresets() {
     const saved = await localStore.list('presets')
@@ -112,14 +132,22 @@ export function useSupporterStudio({ processFile, clearPhoto, getOutput, getThum
     let stored = 0
     try {
       for (let index = 0; index < list.length && !batchStop.value; index++) {
-        if (outputs.value.length >= 100 || outputs.value.reduce((sum, item) => sum + item.bytes, 0) >= OUTPUT_LIMIT_BYTES) throw new Error('Your batch shelf is full. Download and remove some saved outputs before continuing.')
+        if (outputs.value.length >= 100 || shelfBytes() >= OUTPUT_LIMIT_BYTES) throw new Error('Your batch shelf is full. Download and remove some saved outputs before continuing.')
         batchProgress.value = `${index + 1} of ${list.length} · ${list[index].name}`
         const result = await processFile(list[index])
         if (!result) { batchErrors.value.push(`${list[index].name}: processing failed. Try it individually with WASM.`); continue }
         const output = getOutput()
         if (!output) throw new Error('No export was produced. The current photo is still in your workspace.')
-        if (outputs.value.reduce((sum, item) => sum + item.bytes, 0) + output.size > OUTPUT_LIMIT_BYTES) throw new Error('This output exceeds the 200 MB shelf limit. Download it from the workspace before continuing.')
-        const record = { id: crypto.randomUUID(), name: output.name, bytes: output.size, createdAt: Date.now(), blob: output, thumbnail: getThumbnail() }
+        const choice = getChoice()
+        const cutout = choice.id === 'transparent' ? null : getCutout()
+        const thumbnail = getThumbnail()
+        const storageBytes = output.size + (cutout?.size || 0) + (thumbnail?.size || 0)
+        if (shelfBytes() + storageBytes > OUTPUT_LIMIT_BYTES) throw new Error('This photo exceeds the 200 MB shelf limit. Download it from the workspace before continuing.')
+        const record = {
+          id: crypto.randomUUID(), sourceName: list[index].name, name: output.name,
+          bytes: output.size, storageBytes, createdAt: Date.now(), blob: output,
+          cutout, thumbnail, backdropId: choice.id, backdropName: choice.name,
+        }
         await localStore.put('outputs', record)
         outputs.value.push(outputMetadata(record)); stored++
         clearPhoto()
@@ -130,7 +158,53 @@ export function useSupporterStudio({ processFile, clearPhoto, getOutput, getThum
     } catch (error) { studioNotice.value = `Batch paused: ${error.message}`; onError(error) }
     finally { batchRunning.value = false; batchProgress.value = '' }
   }
+  function selectOutput(id) {
+    if (isBusy()) return
+    selectedOutputId.value = selectedOutputId.value === id ? null : id
+  }
+  async function finishOutputs(choiceId, outputId = null) {
+    if (!supporter.value || isBusy() || finishingBusy.value) return
+    const choice = getChoices().find(item => item.id === choiceId)
+    if (!choice) return
+    const targets = outputs.value.filter(item => item.editable && (!outputId || item.id === outputId))
+    if (!targets.length) { studioNotice.value = 'Reprocess these older photos to change their backgrounds.'; return }
+    finishingBusy.value = true
+    finishStop.value = false
+    let completed = 0
+    try {
+      beforeFinish()
+      for (const item of targets) {
+        if (finishStop.value) break
+        finishProgress.value = `Finishing ${completed + 1} of ${targets.length} · ${choice.name}`
+        const record = await localStore.get('outputs', item.id)
+        const cutout = record && transparentSource(record)
+        if (!cutout) throw new Error('This cutout is no longer available. Reprocess the photo to change its background.')
+        const result = await renderBatchFinish(cutout, choice)
+        const retainedCutout = choice.id === 'transparent' ? null : cutout
+        const storageBytes = result.blob.size + (retainedCutout?.size || 0) + (result.thumbnail?.size || 0)
+        if (shelfBytes() - (item.storageBytes ?? item.bytes) + storageBytes > OUTPUT_LIMIT_BYTES) throw new Error('Your shelf is full. Download and remove some photos before changing this finish.')
+        const sourceName = record.sourceName || record.name.replace(/-transparent(?=\.png$)/i, '')
+        const base = sourceName.replace(/\.[^.]+$/, '')
+        const suffix = choice.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'backdrop'
+        const next = {
+          ...record, ...result, sourceName, cutout: retainedCutout,
+          name: `${base}-${suffix}.png`, bytes: result.blob.size, storageBytes,
+          backdropId: choice.id, backdropName: choice.name,
+        }
+        // A failed transaction leaves the previous export and source intact.
+        await localStore.put('outputs', next)
+        const index = outputs.value.findIndex(output => output.id === item.id)
+        if (index >= 0) outputs.value[index] = outputMetadata(next)
+        completed++
+        await new Promise(resolve => setTimeout(resolve, 0))
+      }
+      const skipped = !outputId ? outputs.value.filter(item => !item.editable).length : 0
+      studioNotice.value = `${completed} ${completed === 1 ? 'photo' : 'photos'} finished with ${choice.name}.${finishStop.value ? ' Paused; the remaining photos keep their previous finish.' : ''}${skipped ? ` ${skipped} older photos need reprocessing to change their backgrounds.` : ''}`
+    } catch (error) { studioNotice.value = `Finishing stopped after ${completed}: ${error.message}`; onError(error) }
+    finally { finishingBusy.value = false; finishProgress.value = '' }
+  }
   async function downloadOutput(id) {
+    if (finishingBusy.value) return
     try {
       const record = await localStore.get('outputs', id)
       if (!record?.blob) throw new Error('This saved image is no longer available.')
@@ -168,10 +242,11 @@ export function useSupporterStudio({ processFile, clearPhoto, getOutput, getThum
   }
   function cancelArchive() { archiveController?.abort() }
   async function removeOutput(id) {
-    if (batchRunning.value || archiveBusy.value) return
+    if (batchRunning.value || archiveBusy.value || finishingBusy.value) return
     try {
       await localStore.remove('outputs', id)
       outputs.value = outputs.value.filter(item => item.id !== id)
+      if (selectedOutputId.value === id) selectedOutputId.value = null
       const url = outputUrls.get(id)
       outputUrls.delete(id)
       setTimeout(() => { if (url) URL.revokeObjectURL(url) }, 0)
@@ -180,9 +255,10 @@ export function useSupporterStudio({ processFile, clearPhoto, getOutput, getThum
   }
   function disposeStudio() {
     cancelArchive()
+    finishStop.value = true
     presetUrls.forEach(url => URL.revokeObjectURL(url))
     outputUrls.forEach(url => URL.revokeObjectURL(url))
   }
-  return { archiveBusy, archiveProgress, downloadBatch, cancelArchive, presetImageInput, supporter, presets, outputs, storageNotice, studioNotice, presetName, presetKind, colorOne, colorTwo, presetImage, presetSaving, batchInput, batchRunning, batchStop, batchProgress, batchErrors,
+  return { finishingBusy, finishProgress, finishStop, selectedOutputId, selectOutput, finishOutputs, archiveBusy, archiveProgress, downloadBatch, cancelArchive, presetImageInput, supporter, presets, outputs, storageNotice, studioNotice, presetName, presetKind, colorOne, colorTwo, presetImage, presetSaving, batchInput, batchRunning, batchStop, batchProgress, batchErrors,
     initialize, setSupporter, savePreset, removePreset, runBatch, downloadOutput, removeOutput, disposeStudio }
 }

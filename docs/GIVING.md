@@ -4,11 +4,11 @@ Cutout is an open source, gift-supported photo studio. The regular single-photo
 workflow stays free. A one-time bitcoin gift of **$10 USD or more** opens saved
 backdrops, batch processing, and a local notebook. There is no subscription.
 
-## A simpler flow · v1.3.0
+## A simpler flow · v1.4.0
 
 1. Open **Support Cutout**. Choose **$10**, **$21**, **$50**, or **Other** ($10 minimum).
 2. Continue, then scan the QR or copy the visible **Bitcoin address**. Enter the
-   exact BTC amount in your wallet. **Address + amount + note** expands to show
+   exact BTC amount in your wallet. **Address + details** switches the copy field to show
    a complete bitcoin URI with “Supporting Cutout” as its note. Wallet support
    for pasting URIs varies; plain-address copying remains available. Cutout recognizes the gift automatically.
 3. The supporter studio opens with a thank-you and a place to save a note.
@@ -166,3 +166,32 @@ never deletes shelf images. PWA updates wait for ZIP preparation to finish.
 The QR includes a small centered Bitcoin mark with high error correction. Its
 amount, label, and message use the [Bitcoin URI format](https://github.com/bitcoin/bips/blob/master/bip-0021.mediawiki);
 the logo uses [QR Code Styling image options](https://github.com/kozakdenys/qr-code-styling).
+
+## Batch finishing · v1.4.0
+
+New batches retain the transparent subject alongside each finished PNG. Choose
+a backdrop under **One finish for all photos**, or tap a thumbnail / its **Finish**
+button to open choices for that photo. Colors, gradients, transparency, and saved
+image presets all work. Edits update the local PNG, thumbnail, filename, and future
+individual/ZIP downloads. They do not rerun background removal.
+
+Finishing is sequential and can pause after the current photo. Clear any separate
+photo in the main workspace first so two full-resolution photos do not compete
+for phone memory. The 200 MB shelf limit includes retained sources and thumbnails
+for new files. If a write fails, that photo's previous source and export remain.
+Older opaque PNGs have no retained subject and show **Reprocess to change the
+finish**; existing transparent exports can be finished directly.
+
+Returning supporters see **Message**. It opens the local notebook, with a clearly
+visible **Give again** action. Notes still stay on the device; no delivery service
+is connected. Bitcoin copying uses one **Address only / Address + details**
+segmented control and one copy button. The QR uses deeper orange dots for contrast,
+circular finder marks, and the established [Bitcoin SVG](../main/icons/README.md).
+
+Verification for v1.4.0: 30 Node checks cover retained sources, single/all edits,
+backdrop rendering, resource cleanup, storage failures, copy selection, and safe
+updates. An isolated browser fixture verified whole-shelf and individual edits,
+returning-supporter messaging, Give again, and copy switching. At a 390 px
+viewport, the shelf and modal fit without horizontal overflow and individual
+finish targets measured 62 × 56 px. No screenshots or real gifts were needed.
+Physical-phone QR scanning and finishing should still be checked after publishing.

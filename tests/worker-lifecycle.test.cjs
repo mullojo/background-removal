@@ -110,6 +110,7 @@ test('successive photos get new workers after releasing prior image resources', 
     createApp: options => ({ mount() { app = options.setup(); mounted.forEach(fn => fn()) } }),
   })
   vm.runInContext(fs.readFileSync(path.join(root, 'main/developer-preview.js'), 'utf8').replace(/^import .*\n/gm, '').replaceAll('export ', ''), context)
+  vm.runInContext(fs.readFileSync(path.join(root, 'main/batch-finish.js'), 'utf8').replaceAll('export ', ''), context)
   vm.runInContext(fs.readFileSync(path.join(root, 'main/supporter-studio.js'), 'utf8').replace(/^import .*\n/gm, '').replaceAll('export ', ''), context)
   vm.runInContext(fs.readFileSync(path.join(root, 'main/app.js'), 'utf8').replace(/^import .*\n/gm, '').replaceAll('import.meta.url', JSON.stringify('https://cutout.example/app.js')), context)
   const untilComplete = async () => {
@@ -159,6 +160,15 @@ test('successive photos get new workers after releasing prior image resources', 
   assert.equal(urls.size, 2, 'Only the small shelf thumbnail URLs remain')
   assert.ok([...localRecords.outputs.values()].every(output => output.thumbnail instanceof Blob))
   assert.ok(app.outputs.value.every(output => output.thumbnailUrl && !output.blob && !output.thumbnail))
+  assert.ok([...localRecords.outputs.values()].every(output => output.cutout instanceof Blob), 'Retain transparent sources for later finishing')
+  await app.finishOutputs('cream')
+  assert.equal(workers.length, 6, 'Changing batch finishes must not run inference again')
+  assert.ok(app.outputs.value.every(output => output.backdropId === 'cream' && output.name === 'local-cream.png'))
+  await app.finishOutputs('transparent', app.outputs.value[0].id)
+  assert.equal(app.outputs.value[0].backdropId, 'transparent')
+  assert.equal(app.outputs.value[1].backdropId, 'cream', 'An individual edit leaves the other photo alone')
+  assert.equal(localRecords.outputs.get(app.outputs.value[0].id).cutout, null, 'Transparent exports are themselves the reusable source')
+  assert.equal(openBitmaps.size, 0)
   app.disposeStudio()
   assert.equal(urls.size, 0, 'Disposing the shelf revokes every thumbnail URL')
   assert.ok(canvases.every(canvas => canvas.width === 0 && canvas.height === 0))
