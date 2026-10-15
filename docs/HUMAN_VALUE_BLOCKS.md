@@ -175,3 +175,10 @@ logo, and made messaging the primary action after giving. Added reversible
 batch finishes for all photos or one selected tile, retaining transparent sources
 and protecting phone memory. Human-time allocation remains pending review;
 these milestones do not add counted VBs yet.
+
+### Follow-up · v1.5.0
+
+Refined the outline heart, reduced per-photo batch allocations and retained
+references, and added a clearly labeled memory diagnostics panel. Strengthened
+cleanup and failed-save recovery checks. Physical iPhone retesting remains
+important; human-time allocation is pending review, with no new counted VBs.

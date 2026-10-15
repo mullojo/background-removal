@@ -1,5 +1,6 @@
 import { createApp, computed, nextTick, onMounted, onUnmounted, ref } from './vendor/vue-3.5.43.esm-browser.prod.js'
 import { APP_VERSION, createDiagnostics } from './diagnostics.js'
+import { createMemoryTracker, browserMemory, memoryMB } from './memory.js'
 import { createPwa } from './pwa.js'
 import { useDeveloperPreview } from './developer-preview.js'
 import { GivingPanel } from './giving-ui.js'
@@ -10,6 +11,10 @@ createApp({
   components: { GivingPanel },
   setup() {
 
+    const imageMemory = ref({ imageBytes: 0, peakImageBytes: 0, imageResources: 0 })
+    const memoryTracker = createMemoryTracker(value => { imageMemory.value = value })
+    const browserMemoryState = ref(browserMemory())
+    function refreshMemory() { browserMemoryState.value = browserMemory() }
     const CACHE_KEY = 'transformers-cache'
     const baseChoices = [
       { id: 'transparent', name: 'Transparent', kind: 'transparent' },
@@ -75,6 +80,7 @@ createApp({
     let slowTimer
     let pwa
     let batchCompletion = null
+    let composeTask = null
 
     const busy = computed(() => exportBusy.value || ['preparing', 'loading', 'processing', 'compositing'].includes(phase.value))
     const currentChoice = computed(() => choices.value.find(choice => choice.id === selected.value) || choices.value[0])
@@ -92,7 +98,15 @@ createApp({
     const studio = useSupporterStudio({
       isBusy: () => busy.value || shareBusy.value || studio.batchRunning.value || studio.presetSaving.value || studio.archiveBusy.value || studio.finishingBusy.value,
       processFile: file => new Promise(resolve => { batchCompletion = resolve; acceptFile(file, preferWasm.value, true).catch(fail) }),
-      clearPhoto: () => clearImage(true),
+      clearPhoto: async () => {
+        // Let the entire composition stack finish before dropping this session.
+        await composeTask
+        clearImage(true)
+        await nextTick()
+        await new Promise(resolve => setTimeout(resolve, 250))
+        refreshMemory()
+        diagnostics.record('batch-photo-released', memoryTracker.snapshot())
+      },
       getOutput: () => exportFile,
       getThumbnail: () => exportThumbnail,
       getCutout: () => cutoutBlob,
@@ -130,7 +144,7 @@ createApp({
     function openGiving() { givingOpen.value = true }
     function settleBatch(success) { const done = batchCompletion; batchCompletion = null; done?.(success) }
     function getDiagnostics() {
-      return diagnostics.report({ phase: phase.value, backend: backend.value, requestedBackend: preferWasm.value ? 'wasm' : 'auto', error: error.value ? errorDetails(error.value).message : '', backdrop: selected.value, pwa: pwaState.value })
+      return diagnostics.report({ phase: phase.value, backend: backend.value, requestedBackend: preferWasm.value ? 'wasm' : 'auto', error: error.value ? errorDetails(error.value).message : '', backdrop: selected.value, pwa: pwaState.value, memory: { ...memoryTracker.snapshot(), ...browserMemory() } })
     }
 
     function makeWorker() {
@@ -178,7 +192,7 @@ createApp({
       releaseCanvas(cutoutCanvas)
       cutoutCanvas = null
       cutoutBlob = null
-      imageBitmap?.close()
+      closeBitmap(imageBitmap)
       imageBitmap = null
       showOriginal.value = false
       fileName.value = ''
@@ -186,8 +200,14 @@ createApp({
     }
 
     function revoke(url) { if (url) nextTick(() => URL.revokeObjectURL(url)) }
-    function releaseCanvas(canvas) { if (canvas) { canvas.width = 0; canvas.height = 0 } }
+    function releaseCanvas(canvas) {
+      if (canvas) { canvas.width = 0; canvas.height = 0; memoryTracker.release(canvas) }
+    }
+    function closeBitmap(bitmap) {
+      if (bitmap) { bitmap.close(); memoryTracker.release(bitmap) }
+    }
     function context2d(canvas, options) {
+      memoryTracker.track(canvas)
       const context = canvas.getContext('2d', options)
       if (!context) throw new Error('The browser could not allocate image memory. Try a smaller photo.')
       return context
@@ -207,6 +227,7 @@ createApp({
       } finally { releaseCanvas(canvas) }
     }
     function mark(stage, details = {}, active = true) {
+      refreshMemory()
       diagnostics.record(stage, details, { stage, active })
     }
     function errorDetails(cause) {
@@ -216,7 +237,11 @@ createApp({
     }
     function globalError(event) { diagnostics.record('page-error', errorDetails(event.error || event.message)) }
     function rejectedPromise(event) { diagnostics.record('unhandled-rejection', errorDetails(event.reason)) }
-    function pageHidden() { diagnostics.record('visibility', { state: document.visibilityState }) }
+    function pageHidden() {
+      if (document.visibilityState === 'hidden' && studio.batchRunning.value) studio.batchStop.value = true
+      refreshMemory()
+      diagnostics.record('visibility', { state: document.visibilityState })
+    }
     function pageLeaving() { diagnostics.record('pagehide') }
 
     async function copyDiagnostics() {
@@ -354,7 +379,8 @@ createApp({
         stopWorker('inference-complete', true)
         mark('compositing', { maskWidth: data.width, maskHeight: data.height })
         statusDetail.value = 'Applying the mask to your full-resolution photo…'
-        compose(data).catch(cause => { if (data.id === requestId) fail(cause) })
+        const id = data.id
+        composeTask = compose(data).catch(cause => { if (id === requestId) fail(cause) }).finally(() => { composeTask = null })
       } else if (data.type === 'error') {
         if (data.id && data.id !== requestId) return
         fail(Object.assign(new Error(data.message), { stack: data.stack || data.message }))
@@ -367,7 +393,7 @@ createApp({
       mark('error', errorDetails(cause), false)
       stopWorker('error')
       console.error('[Cutout]', cause)
-      imageBitmap?.close()
+      closeBitmap(imageBitmap)
       imageBitmap = null
       if (!cutoutBlob) { releaseCanvas(cutoutCanvas); cutoutCanvas = null }
       phase.value = 'error'
@@ -387,7 +413,7 @@ createApp({
       queuedFile = null
       pendingPhoto = null
       stopWorker('cancelled')
-      imageBitmap?.close()
+      closeBitmap(imageBitmap)
       imageBitmap = null
       phase.value = 'error'
       error.value = 'Processing stopped.'
@@ -479,8 +505,8 @@ createApp({
       try {
         mark('image-decoding', { type: file.type, bytes: file.size }, true)
         diagnostics.record('image-metadata', {}, { image: { type: file.type, bytes: file.size } })
-        const decoded = await createImageBitmap(file, { imageOrientation: 'from-image' })
-        if (id !== requestId) { decoded.close(); return }
+        const decoded = memoryTracker.track(await createImageBitmap(file, { imageOrientation: 'from-image' }))
+        if (id !== requestId) { closeBitmap(decoded); return }
         imageBitmap = decoded
         fileName.value = file.name
         dimensions.value = `${imageBitmap.width.toLocaleString()} × ${imageBitmap.height.toLocaleString()} px`
@@ -499,10 +525,10 @@ createApp({
           pixels = context.getImageData(0, 0, input.width, input.height).data
           releaseCanvas(input)
           mark('original-preview-encoding')
-          preview = await createPreview(decoded)
+          preview = await createPreview(decoded, studio.batchRunning.value ? 240 : 1280)
         } finally {
           releaseCanvas(input)
-          decoded.close()
+          closeBitmap(decoded)
           if (imageBitmap === decoded) imageBitmap = null
         }
         if (id !== requestId) return
@@ -534,8 +560,8 @@ createApp({
       const id = requestId
       if (!sourceFile) throw new Error('The original photo is no longer available. Please choose it again.')
       mark('export-image-decoding')
-      const bitmap = await createImageBitmap(sourceFile, { imageOrientation: 'from-image' })
-      if (id !== requestId) { bitmap.close(); return }
+      const bitmap = memoryTracker.track(await createImageBitmap(sourceFile, { imageOrientation: 'from-image' }))
+      if (id !== requestId) { closeBitmap(bitmap); return }
       imageBitmap = bitmap
       const { width, height } = bitmap
       mark('export-image-decoded', { width, height })
@@ -559,7 +585,7 @@ createApp({
       } catch (cause) { releaseCanvas(output); throw cause }
       finally {
         releaseCanvas(maskCanvas)
-        bitmap.close()
+        closeBitmap(bitmap)
         if (imageBitmap === bitmap) imageBitmap = null
       }
       cutoutCanvas = output
@@ -573,11 +599,17 @@ createApp({
       }
       revoke(resultUrl.value)
       mark('result-preview-encoding')
-      const preview = await createPreview(output)
+      const preview = await createPreview(output, studio.batchRunning.value ? 240 : 1280)
       if (id !== requestId) { releaseCanvas(output); return }
       resultUrl.value = URL.createObjectURL(preview.blob)
       cutoutBlob = blob
       await updateExport()
+      if (studio.batchRunning.value) {
+        // The PNG blobs are enough for storage and later finishing. Keep no
+        // full-resolution canvas alive while the shelf commits this photo.
+        releaseCanvas(cutoutCanvas)
+        cutoutCanvas = null
+      }
       if (id !== requestId || phase.value === 'error') return
       phase.value = 'complete'
       activeRequest = null
@@ -593,6 +625,15 @@ createApp({
       if (exportTask) return exportTask
       exportBusy.value = true
       exportTask = (async () => {
+        if (!cutoutCanvas && cutoutBlob) {
+          const decoded = memoryTracker.track(await createImageBitmap(cutoutBlob))
+          try {
+            cutoutCanvas = document.createElement('canvas')
+            cutoutCanvas.width = decoded.width
+            cutoutCanvas.height = decoded.height
+            context2d(cutoutCanvas).drawImage(decoded, 0, 0)
+          } finally { closeBitmap(decoded) }
+        }
         while (exportPending && cutoutCanvas) {
           exportPending = false
           const currentResult = resultUrl.value
@@ -601,10 +642,14 @@ createApp({
           mark('encoding-export', { backdrop: choice.id })
           try {
             if (choice.kind !== 'transparent') {
-              canvas = document.createElement('canvas')
-              canvas.width = cutoutCanvas.width
-              canvas.height = cutoutCanvas.height
+              const inPlace = studio.batchRunning.value
+              if (!inPlace) {
+                canvas = document.createElement('canvas')
+                canvas.width = cutoutCanvas.width
+                canvas.height = cutoutCanvas.height
+              }
               const context = context2d(canvas)
+              if (inPlace) context.globalCompositeOperation = 'destination-over'
               if (choice.kind === 'solid') context.fillStyle = choice.color
               else if (choice.kind === 'gradient') {
                 const gradient = context.createLinearGradient(0, 0, canvas.width, canvas.height)
@@ -613,13 +658,14 @@ createApp({
                 context.fillStyle = gradient
               }
               if (choice.kind === 'image') {
-                const backdrop = await createImageBitmap(choice.blob)
+                const backdrop = memoryTracker.track(await createImageBitmap(choice.blob))
                 try {
                   const rect = coverRect(backdrop.width, backdrop.height, canvas.width, canvas.height)
                   context.drawImage(backdrop, rect.x, rect.y, rect.width, rect.height)
-                } finally { backdrop.close() }
+                } finally { closeBitmap(backdrop) }
               } else context.fillRect(0, 0, canvas.width, canvas.height)
-              context.drawImage(cutoutCanvas, 0, 0)
+              if (inPlace) context.globalCompositeOperation = 'source-over'
+              else context.drawImage(cutoutCanvas, 0, 0)
             }
             const blob = choice.kind === 'transparent' ? cutoutBlob : await new Promise(resolve => canvas.toBlob(resolve, 'image/png'))
             if (!blob) throw new Error('Could not export this image. Try a smaller photo.')
@@ -688,14 +734,14 @@ createApp({
       studio.disposeStudio()
       pwa?.dispose()
       clearTimeout(slowTimer)
-      stopWorker('page-unmounted'); imageBitmap?.close(); releaseCanvas(cutoutCanvas)
+      stopWorker('page-unmounted'); closeBitmap(imageBitmap); releaseCanvas(cutoutCanvas)
       revoke(originalUrl.value); revoke(resultUrl.value); revoke(exportUrl.value)
       window.removeEventListener('error', globalError)
       window.removeEventListener('unhandledrejection', rejectedPromise)
       window.removeEventListener('pagehide', pageLeaving)
       document.removeEventListener('visibilitychange', pageHidden)
     })
-    return { ...studio, ...developer, updateSupporter, openGiving, givingOpen, getDiagnostics, CACHE_KEY, choices, fileInput, fileName, dimensions, originalUrl, resultUrl, exportUrl,
+    return { imageMemory, browserMemoryState, refreshMemory, memoryMB, ...studio, ...developer, updateSupporter, openGiving, givingOpen, getDiagnostics, CACHE_KEY, choices, fileInput, fileName, dimensions, originalUrl, resultUrl, exportUrl,
   selected, phase, backend, modelLoaded, downloadFile, downloadProgress, statusDetail, error,
   dragOver, showOriginal, cacheFiles, cacheBytes, cacheAvailable, origin,
   busy, currentChoice, exportName, stageText, cacheSize, previewStyle,

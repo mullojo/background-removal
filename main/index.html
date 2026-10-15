@@ -249,6 +249,21 @@
             <p v-if="pwaState.message" class="section-description" role="status">{{ pwaState.message }}</p>
           </section>
           <details class="diagnostics-section" :open="Boolean(interruptedNotice) || developerTools"><summary>Help &amp; diagnostics</summary><p v-if="interruptedNotice" class="section-description">{{ interruptedNotice }}</p><p class="section-description">Copy processing steps, image dimensions, browser details, and errors. Photos and filenames are not included. The latest steps are saved in this browser to help after an unexpected reload.</p><label class="wasm-option"><input type="checkbox" v-model="preferWasm" :disabled="busy"> Use WASM for the next run</label><button class="button button-outline full" @click="copyDiagnostics">Copy diagnostics <span aria-hidden="true">↗</span></button><p v-if="diagnosticMessage" class="section-description" role="status">{{ diagnosticMessage }}</p><textarea v-if="diagnosticText" class="diagnostic-report" aria-label="Diagnostic report" :value="diagnosticText" readonly @focus="$event.target.select()"></textarea><small>App {{ APP_VERSION }}</small>
+            <section class="mt-5 rounded-2xl border border-line bg-paper p-4 text-xs" aria-label="Memory and device">
+              <div class="flex items-center justify-between gap-3">
+                <h3 class="m-0 text-sm font-semibold">Memory &amp; device</h3>
+                <button class="min-h-11 px-2 font-semibold text-clay" @click="refreshMemory">Refresh</button>
+              </div>
+              <dl class="m-0 space-y-3">
+                <div class="flex justify-between gap-3"><dt class="text-muted">Workspace image buffers · estimate</dt><dd class="m-0 shrink-0 font-medium">{{ memoryMB(imageMemory.imageBytes) }}</dd></div>
+                <div class="flex justify-between gap-3"><dt class="text-muted">Peak this session · image buffers</dt><dd class="m-0 shrink-0 font-medium">{{ memoryMB(imageMemory.peakImageBytes) }}</dd></div>
+                <div v-if="browserMemoryState.heap" class="flex justify-between gap-3"><dt class="text-muted">Browser JS heap · sample</dt><dd class="m-0 shrink-0 font-medium">{{ memoryMB(browserMemoryState.heap.usedBytes) }}</dd></div>
+                <div v-if="browserMemoryState.deviceGB" class="flex justify-between gap-3"><dt class="text-muted">Device RAM · rough browser report</dt><dd class="m-0 shrink-0 font-medium">{{ browserMemoryState.deviceGB }} GB</dd></div>
+              </dl>
+              <p class="mt-3 mb-0 text-[11px] leading-relaxed text-muted">Image estimates cover this workspace’s canvases and decoded photos. They exclude the model, GPU allocations, shelf thumbnails, and browser overhead.</p>
+              <p v-if="!browserMemoryState.heap" class="mt-2 mb-0 text-[11px] leading-relaxed text-muted">This browser does not expose live memory usage. This is expected on iPhone.</p>
+              <p class="mt-2 mb-0 text-[11px] leading-relaxed text-muted">Free phone RAM, other apps’ usage, and thermal pressure are not available here. Storage space and the JavaScript heap limit are not a RAM budget.</p>
+            </section>
             <section
               v-if="developerTools"
               id="developer-tools"

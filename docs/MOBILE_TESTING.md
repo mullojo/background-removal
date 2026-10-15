@@ -128,3 +128,56 @@ References: [Apple device inspection](https://developer.apple.com/documentation/
 ## Verification limits
 
 Desktop browser smoke checks for the initial mobile improvements used controlled masks and simulated worker failures to verify compositing, PNG export, sharing calls, diagnostics, and recovery. For `mobile-2`, additional local checks using a native Canvas implementation verify that the original bitmap is closed before inference, that a 4284 × 5712 source uses 960 × 1280 previews, and that the full-size exported PNG retains its dimensions. They also exercise soft-mask transparency, interrupted-session recovery, WASM retry, and clipboard fallback. These checks do not reproduce an iPhone process crash or prove that a native Photos save completes. Retest the failing glass-bottle photo on the physical device after deployment.
+
+## Batch memory cleanup · v1.5.0
+
+Each batch photo gets a single-use model worker. After inference its pipeline is
+disposed and its worker is terminated before full-size export. Batch previews
+are limited to 240 px. Backgrounds are drawn behind the subject in the existing
+full-size canvas, then that canvas is zeroed before the shelf transaction. The
+transparent PNG remains available for later finishing. If storage fails, the
+current PNG is still downloadable and its transparent canvas can be recreated
+on demand for normal workspace edits.
+
+After each successful save, completed input entries and temporary Blob references
+are dropped. Composition completes, the workspace clears, Vue detaches old image
+URLs, and a 250 ms interval gives the browser time to reclaim native resources.
+No web API can force browser/GPU garbage collection; this interval is not proof
+that process RAM has returned to its previous level. Hiding the app pauses after
+the current saved photo. Choose remaining photos again to resume.
+
+Under **Help & diagnostics → Memory & device**, workspace canvas/bitmap estimates
+update as resources are tracked/released; peak estimates remain for the session.
+These exclude model memory, GPU allocations, thumbnails, codecs, and general
+browser overhead. Zero means these tracked resources were released, not that
+the app uses zero RAM or that the phone has low memory pressure.
+
+Optional browser JS-heap readings are limited and unreliable for total usage;
+iPhone Safari does not expose them. Coarse `deviceMemory` values, when available,
+are approximate device RAM rather than free RAM. The app cannot inspect other
+apps, total free RAM, thermal state, or the OS's changing process budget. Disk
+storage quotas and JS-heap limits must not be presented as that budget. The
+experimental whole-app memory API has limited support and isolation requirements;
+we do not change hosting/security headers solely to enable it.
+
+For deeper measurements, use Safari's remote Web Inspector Memory timeline from
+a Mac. Inspect growing allocations over a batch and compare the before/after
+trend rather than treating any fixed number as a safe iPhone memory limit.
+
+Retest 5–20 large camera photos in Safari and the PWA, with solid, gradient, and
+image backdrops. Check `batch-photo-released` diagnostics report `imageBytes: 0`
+and `imageResources: 0` between photos, exports keep full dimensions and correct
+transparency, shelf storage failures leave a downloadable/editable current image,
+and hiding the app pauses without starting another worker. Desktop lifecycle
+checks cannot reproduce or prove a fix for native iPhone process termination.
+
+Sources: [browser heap API limits](https://developer.mozilla.org/en-US/docs/Web/API/Performance/memory),
+[coarse device memory](https://developer.mozilla.org/en-US/docs/Web/API/Navigator/deviceMemory),
+[experimental app-memory measurement](https://developer.mozilla.org/en-US/docs/Web/API/Performance/measureUserAgentSpecificMemory),
+and [WebKit memory debugging](https://webkit.org/blog/6425/memory-debugging-with-web-inspector/).
+
+Verification: 33 Node checks pass. A browser fixture using native canvases and a
+controlled mask completed a two-photo Sage batch, retained correctly sized shelf
+thumbnails (192 px and 240 px), and showed 0.0 MB of tracked workspace buffers
+after cleanup. The fixture does not load the inference model or simulate native
+GPU/process memory pressure; retest actual large photos on the physical phone.

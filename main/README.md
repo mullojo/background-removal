@@ -9,6 +9,7 @@ The stable no-build Cutout app, with these editable implementation files:
 - `app.js` — Vue 3 application state and image export
 - `giving.js` and `giving-ui.js` — Bitcoin requests, portable codes, and giving/message UI
 - `supporter-studio.js` — saved brand backdrops and sequential batch processing
+- `memory.js` — workspace buffer estimates and feature-detected browser readings
 - `batch-finish.js` — sequential saved-cutout finishing without inference
 - `qr-loader.js` — QR runtime loaded only for a gift
 - `developer-preview.js` — temporary, session-only extras preview (seven version taps)

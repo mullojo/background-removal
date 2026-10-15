@@ -214,6 +214,7 @@ test('offline uploads wait for connectivity and model readiness; worker failures
     createImageBitmap: async () => { decodes++; throw Error('Synthetic decode failure') },
     createApp: options => ({ mount() { app = options.setup(); mounted.forEach(fn => fn()) } }),
   })
+  vm.runInContext(fs.readFileSync(path.join(root, 'main/memory.js'), 'utf8').replaceAll('export ', ''), context)
   vm.runInContext(fs.readFileSync(path.join(root, 'main/developer-preview.js'), 'utf8').replace(/^import .*\n/gm, '').replaceAll('export ', ''), context)
   vm.runInContext(fs.readFileSync(path.join(root, 'main/supporter-studio.js'), 'utf8').replace(/^import .*\n/gm, '').replaceAll('export ', ''), context)
   vm.runInContext(source, context)

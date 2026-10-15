@@ -51,10 +51,13 @@ test('failed inference disposes its session before reporting an error', async ()
 test('successive photos get new workers after releasing prior image resources', async () => {
   const mounted = [], workers = [], canvases = [], openBitmaps = new Set(), urls = new Map()
   let app, serial = 0, preparingExports = 0
+  const batchReleases = []
+  let rejectNextOutput = false
   class Worker {
     constructor() {
       assert.equal(openBitmaps.size, 0)
       assert.ok(canvases.every(canvas => canvas.width === 0 && canvas.height === 0), 'Old canvases must be released before a replacement model loads')
+      if (app?.batchRunning.value) assert.equal(app.imageMemory.value.imageBytes, 0, 'No previous photo buffers can remain at the next batch worker')
       workers.push(this)
       this.processes = 0
     }
@@ -77,7 +80,13 @@ test('successive photos get new workers after releasing prior image resources', 
   }
   const document = {
     addEventListener() {}, removeEventListener() {}, createElement() {
-      const canvas = { width: 0, height: 0, getContext: () => context2d, toBlob: callback => queueMicrotask(() => callback(new Blob(['PNG']))) }
+      const canvas = { width: 0, height: 0, getContext: () => context2d, toBlob: callback => {
+        if (app?.batchRunning.value && workers.at(-1).terminated) {
+          assert.equal(openBitmaps.size, 0, 'Close full-size bitmaps before batch encoding')
+          assert.ok(canvases.filter(item => item.width === 2000 && item.height === 1000).length <= 1, 'Batch encoding must never retain two full-resolution canvases')
+        }
+        queueMicrotask(() => callback(new Blob(['PNG'])))
+      } }
       canvases.push(canvas)
       return canvas
     },
@@ -92,7 +101,10 @@ test('successive photos get new workers after releasing prior image resources', 
     localStore: {
       list: async name => [...localRecords[name].values()],
       get: async (name, id) => localRecords[name].get(id),
-      put: async (name, item) => localRecords[name].set(item.id, item),
+      put: async (name, item) => {
+        if (name === 'outputs' && rejectNextOutput) { rejectNextOutput = false; throw Error('Storage is full') }
+        return localRecords[name].set(item.id, item)
+      },
       remove: async (name, id) => localRecords[name].delete(id),
     },
     console: { error() {} }, URL: LocalURL, Worker, Blob, File, Uint8ClampedArray, setTimeout, clearTimeout, document,
@@ -100,15 +112,16 @@ test('successive photos get new workers after releasing prior image resources', 
     navigator: { onLine: true },
     ref: value => ({ value }), computed: getter => ({ get value() { return getter() } }),
     nextTick: callback => Promise.resolve().then(callback), onMounted: fn => mounted.push(fn), onUnmounted() {},
-    APP_VERSION: 'test', createDiagnostics: () => ({ record(name) { if (name === 'export-image-decoding') { preparingExports++; assert.ok(workers.at(-1).terminated, 'Release runtime before full-size export decode') } } }),
+    APP_VERSION: 'test', createDiagnostics: () => ({ record(name, details) { if (name === 'batch-photo-released') batchReleases.push(details); if (name === 'export-image-decoding') { preparingExports++; assert.ok(workers.at(-1).terminated, 'Release runtime before full-size export decode') } } }),
     createPwa: () => ({}),
     createImageBitmap: async () => {
-      const bitmap = { width: 20, height: 10, close() { openBitmaps.delete(bitmap) } }
+      const bitmap = { width: 2000, height: 1000, close() { openBitmaps.delete(bitmap) } }
       openBitmaps.add(bitmap)
       return bitmap
     },
     createApp: options => ({ mount() { app = options.setup(); mounted.forEach(fn => fn()) } }),
   })
+  vm.runInContext(fs.readFileSync(path.join(root, 'main/memory.js'), 'utf8').replaceAll('export ', ''), context)
   vm.runInContext(fs.readFileSync(path.join(root, 'main/developer-preview.js'), 'utf8').replace(/^import .*\n/gm, '').replaceAll('export ', ''), context)
   vm.runInContext(fs.readFileSync(path.join(root, 'main/batch-finish.js'), 'utf8').replaceAll('export ', ''), context)
   vm.runInContext(fs.readFileSync(path.join(root, 'main/supporter-studio.js'), 'utf8').replace(/^import .*\n/gm, '').replaceAll('export ', ''), context)
@@ -152,6 +165,8 @@ test('successive photos get new workers after releasing prior image resources', 
   await new Promise(resolve => setImmediate(resolve))
   await app.runBatch({ target: { files: [file, file], value: 'selected' } })
   assert.equal(workers.length, 6, 'Batch photos each get a fresh single-use worker')
+  assert.equal(batchReleases.length, 2)
+  assert.ok(batchReleases.every(item => item.imageBytes === 0 && item.imageResources === 0))
   assert.equal(app.outputs.value.length, 2)
   assert.ok(app.outputs.value.every(output => output.name.endsWith('-sage.png')), 'Every batch photo uses the chosen backdrop')
   assert.equal(localRecords.outputs.size, 2, 'Persist outputs before releasing their canvases')
@@ -169,6 +184,18 @@ test('successive photos get new workers after releasing prior image resources', 
   assert.equal(app.outputs.value[1].backdropId, 'cream', 'An individual edit leaves the other photo alone')
   assert.equal(localRecords.outputs.get(app.outputs.value[0].id).cutout, null, 'Transparent exports are themselves the reusable source')
   assert.equal(openBitmaps.size, 0)
+  rejectNextOutput = true
+  await app.runBatch({ target: { files: [file], value: 'selected' } })
+  assert.match(app.studioNotice.value, /Storage is full/)
+  assert.equal(localRecords.outputs.size, 2)
+  assert.equal(app.canRetry.value, true, 'A failed shelf write keeps the current downloadable photo')
+  assert.equal(app.imageMemory.value.imageBytes, 0, 'Full-resolution canvas is released before the shelf write')
+  app.selectBackground('white')
+  await new Promise(resolve => setImmediate(resolve))
+  assert.equal(app.exportName.value, 'local-white.png', 'The workspace can reconstruct its transparent canvas after a failed batch save')
+  assert.ok(app.exportUrl.value)
+  app.clearImage()
+  await new Promise(resolve => setImmediate(resolve))
   app.disposeStudio()
   assert.equal(urls.size, 0, 'Disposing the shelf revokes every thumbnail URL')
   assert.ok(canvases.every(canvas => canvas.width === 0 && canvas.height === 0))

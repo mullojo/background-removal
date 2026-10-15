@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.5.0 — 2026-10-14
+
+- Replace font heart glyphs with a consistent symmetric outline SVG in giving.
+- Reduce batch previews to 240 px and compose backdrops behind the subject in
+  one full-resolution canvas. Release that canvas before the shelf write.
+- Drop completed source files and scope export/source Blob references per photo.
+  Await composition and UI cleanup, then allow a short reclamation interval before
+  the next worker. Pause after the current photo if the app is hidden.
+- Reconstruct the transparent workspace canvas on demand if a batch shelf write
+  fails, preserving downloads and later background changes.
+- Add Memory & device under Help & diagnostics: workspace image-buffer estimates,
+  peak estimates, and optional browser heap/coarse device readings. Clearly mark
+  unknown system pressure and RAM budgets; include samples in diagnostics.
+- Verify no tracked workspace buffers remain before a new batch worker, only one
+  full-resolution canvas is used in batch encoding, and failed writes retain an
+  editable export. Preserve worker disposal before export and PWA update guards.
+
 ## 1.4.0 — 2026-10-14
 
 - Integrate Bitcoin copying into one segmented address/details control with one

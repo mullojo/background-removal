@@ -121,12 +121,13 @@ export function useSupporterStudio({
     catch (error) { studioNotice.value = error.message }
   }
   async function runBatch(event) {
-    const files = Array.from(event.target.files || []); event.target.value = ''
+    let files = Array.from(event.target.files || []); event.target.value = ''
     if (!supporter.value || isBusy()) return
     let list
     try {
       if (globalThis.navigator?.onLine === false) throw new Error('Connect to the internet before starting a batch.')
       list = batchFiles(files)
+      files = null
     } catch (error) { studioNotice.value = error.message; return }
     batchRunning.value = true; batchStop.value = false; batchErrors.value = []; studioNotice.value = ''
     let stored = 0
@@ -136,27 +137,33 @@ export function useSupporterStudio({
         batchProgress.value = `${index + 1} of ${list.length} · ${list[index].name}`
         const result = await processFile(list[index])
         if (!result) { batchErrors.value.push(`${list[index].name}: processing failed. Try it individually with WASM.`); continue }
-        const output = getOutput()
-        if (!output) throw new Error('No export was produced. The current photo is still in your workspace.')
-        const choice = getChoice()
-        const cutout = choice.id === 'transparent' ? null : getCutout()
-        const thumbnail = getThumbnail()
-        const storageBytes = output.size + (cutout?.size || 0) + (thumbnail?.size || 0)
-        if (shelfBytes() + storageBytes > OUTPUT_LIMIT_BYTES) throw new Error('This photo exceeds the 200 MB shelf limit. Download it from the workspace before continuing.')
-        const record = {
-          id: crypto.randomUUID(), sourceName: list[index].name, name: output.name,
-          bytes: output.size, storageBytes, createdAt: Date.now(), blob: output,
-          cutout, thumbnail, backdropId: choice.id, backdropName: choice.name,
-        }
-        await localStore.put('outputs', record)
-        outputs.value.push(outputMetadata(record)); stored++
-        clearPhoto()
-        // Release this photo and yield before the next single-use model worker.
-        await new Promise(resolve => setTimeout(resolve, 50))
+        await saveBatchPhoto(list[index])
+        stored++
+        list[index] = null
+        await clearPhoto()
+        // The saved file's Blob references have left their own function scope.
+        // No source, export, or decoded buffer from it reaches the next worker.
+        if (globalThis.document?.visibilityState === 'hidden') batchStop.value = true
       }
       studioNotice.value = `${stored} new ${stored === 1 ? 'output' : 'outputs'} saved on this device.${batchStop.value ? ' Batch paused after the current photo. Choose the remaining files when you’re ready.' : ''}`
     } catch (error) { studioNotice.value = `Batch paused: ${error.message}`; onError(error) }
     finally { batchRunning.value = false; batchProgress.value = '' }
+  }
+  async function saveBatchPhoto(file) {
+    const output = getOutput()
+    if (!output) throw new Error('No export was produced. The current photo is still in your workspace.')
+    const choice = getChoice()
+    const cutout = choice.id === 'transparent' ? null : getCutout()
+    const thumbnail = getThumbnail()
+    const storageBytes = output.size + (cutout?.size || 0) + (thumbnail?.size || 0)
+    if (shelfBytes() + storageBytes > OUTPUT_LIMIT_BYTES) throw new Error('This photo exceeds the 200 MB shelf limit. Download it from the workspace before continuing.')
+    const record = {
+      id: crypto.randomUUID(), sourceName: file.name, name: output.name,
+      bytes: output.size, storageBytes, createdAt: Date.now(), blob: output,
+      cutout, thumbnail, backdropId: choice.id, backdropName: choice.name,
+    }
+    await localStore.put('outputs', record)
+    outputs.value.push(outputMetadata(record))
   }
   function selectOutput(id) {
     if (isBusy()) return

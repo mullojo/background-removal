@@ -389,7 +389,7 @@ export const GivingPanel = {
       class="inline-flex min-h-11 items-center gap-2 rounded-full border border-[#dfc7b8] bg-[#f4e8dc] px-4 text-xs font-semibold text-[#86472f]"
       @click="$emit('update:modelValue', true)"
     >
-      <span class="text-lg" aria-hidden="true">{{ supporter ? '💬' : '♡' }}</span>
+      <span v-if="supporter" class="text-lg" aria-hidden="true">💬</span><svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="size-5 shrink-0"><path d="M12 20.5 3.8 12.6C1.4 10.2 1.4 6.4 3.8 4.5 6.2 2.6 9.5 3.2 12 6c2.5-2.8 5.8-3.4 8.2-1.5 2.4 1.9 2.4 5.7 0 8.1L12 20.5Z"/></svg>
       {{ preview ? 'Preview studio' : supporter ? 'Message' : 'Support Cutout' }}
     </button>
 
@@ -412,7 +412,7 @@ export const GivingPanel = {
 
         <div class="px-6 pt-8 pb-6 sm:px-8 sm:pt-9 sm:pb-8">
           <header class="pr-10">
-            <span v-if="!showGiftDetails && !restoring" class="mb-4 grid size-11 place-items-center rounded-2xl bg-[#f6e9df] text-2xl text-clay" aria-hidden="true">♡</span>
+            <span v-if="!showGiftDetails && !restoring" class="mb-4 grid size-11 place-items-center rounded-2xl bg-[#f6e9df] text-2xl text-clay" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="size-5 shrink-0"><path d="M12 20.5 3.8 12.6C1.4 10.2 1.4 6.4 3.8 4.5 6.2 2.6 9.5 3.2 12 6c2.5-2.8 5.8-3.4 8.2-1.5 2.4 1.9 2.4 5.7 0 8.1L12 20.5Z"/></svg></span>
             <h2 id="giving-title" class="m-0 text-[28px] leading-tight font-semibold tracking-tight">
               {{ restoring ? 'Opening your studio' : showStudio ? 'Leave us a message' : showGiftDetails ? 'Give with bitcoin' : 'Keep Cutout growing' }}
             </h2>
@@ -568,7 +568,7 @@ export const GivingPanel = {
             </details>
           </details>
 
-          <button v-if="showStudio" class="mt-5 flex min-h-12 w-full items-center justify-center gap-2 rounded-full border border-[#f3cfa5] bg-[#fff6e9] px-4 text-sm font-semibold text-[#a94e00] hover:bg-[#ffedcf]" @click="givingAgain = true"><span aria-hidden="true">♡</span> Give again</button>
+          <button v-if="showStudio" class="mt-5 flex min-h-12 w-full items-center justify-center gap-2 rounded-full border border-[#f3cfa5] bg-[#fff6e9] px-4 text-sm font-semibold text-[#a94e00] hover:bg-[#ffedcf]" @click="givingAgain = true"><span aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="size-5 shrink-0"><path d="M12 20.5 3.8 12.6C1.4 10.2 1.4 6.4 3.8 4.5 6.2 2.6 9.5 3.2 12 6c2.5-2.8 5.8-3.4 8.2-1.5 2.4 1.9 2.4 5.7 0 8.1L12 20.5Z"/></svg></span> Give again</button>
           <button v-if="givingAgain && hasExtras" class="mt-2 min-h-11 w-full text-xs text-muted" @click="givingAgain = false">Back to my message</button>
           <p v-if="notice" class="mt-4 mb-0 rounded-xl bg-sage px-3 py-2 text-xs leading-relaxed text-sage-ink" role="status">{{ notice }}</p>
           <p v-if="issue" class="mt-4 mb-0 rounded-xl bg-red-50 px-3 py-2 text-xs leading-relaxed text-red-800" role="alert">{{ issue }}</p>
