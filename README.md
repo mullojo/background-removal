@@ -68,10 +68,12 @@ with changelog notes. See [CHANGELOG.md](CHANGELOG.md) and the
 This is an open source, gift-supported project. We record the human attention
 and effort contributed in [human value blocks](docs/HUMAN_VALUE_BLOCKS.md):
 approximately one hour per block, valued at $100 toward a voluntary support
-baseline. The initial retrospective estimate through v1.0.0 is **14 blocks /
-$1,400**, including **7 blocks / $700 on October 13, 2026**. These are provisional
-estimates, with assumptions and ranges in the record. The app now includes bitcoin giving, portable supporter codes, saved brand
-backdrops, batch processing, and a local message notebook. See the
+baseline. Through v1.5.0, the rounded working estimate is **26 blocks / $2,600**,
+including **12 blocks / $1,200 on October 14, 2026** and the prior **14 blocks /
+$1,400** baseline. The record includes direction, active monitoring, device testing,
+and parallel project work, with whole-hour rounding when uncertain. The app now
+includes bitcoin giving, portable supporter codes, saved brand backdrops, batch
+processing, and a local message notebook. See the
 [giving and supporter guide](docs/GIVING.md) for the flow and current limitations.
 
 ### Hosting and licensing
