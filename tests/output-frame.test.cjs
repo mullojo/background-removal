@@ -43,3 +43,33 @@ test('all ratios respect the original pixel budget and longest edge', async () =
     }
   }
 })
+
+
+test('fit can anchor a flat bottom edge instead of leaving a gap', async () => {
+  const { outputFrame } = await modulePromise
+  const top = outputFrame(1000, 1000, '4:5', 'fit', 'top')
+  const bottom = outputFrame(1000, 1000, '4:5', 'fit', 'bottom')
+  assert.equal(top.photo.y, 0)
+  assert.ok(top.photo.height < top.height)
+  assert.ok(bottom.photo.y > 0)
+  assert.equal(bottom.photo.y + bottom.photo.height, bottom.height)
+  assert.equal(bottom.width, top.width)
+  assert.equal(bottom.height, top.height)
+  assert.equal(bottom.photo.width, top.photo.width, 'Anchoring must not rescale the photo')
+})
+
+test('anchors retain the chosen edge during crops and handle all corners', async () => {
+  const { FRAME_ANCHORS, outputFrame } = await modulePromise
+  for (const placement of ['fit', 'fill']) {
+    for (const [width, height] of [[900, 1600], [1600, 900]]) {
+      for (const anchor of FRAME_ANCHORS) {
+        const frame = outputFrame(width, height, '1:1', placement, anchor.id)
+        assert.equal(frame.photo.x, (frame.width - frame.photo.width) * anchor.x)
+        assert.equal(frame.photo.y, (frame.height - frame.photo.height) * anchor.y)
+        if (anchor.x === 1) assert.ok(Math.abs(frame.photo.x + frame.photo.width - frame.width) < 1e-6)
+        if (anchor.y === 1) assert.ok(Math.abs(frame.photo.y + frame.photo.height - frame.height) < 1e-6)
+      }
+    }
+  }
+  assert.deepEqual(outputFrame(900, 1600, '1:1', 'fit', 'invalid'), outputFrame(900, 1600, '1:1'))
+})

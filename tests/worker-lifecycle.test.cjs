@@ -155,11 +155,17 @@ test('successive photos get new workers after releasing prior image resources', 
   assert.deepEqual(exportSizes.at(-1), [1885, 1060], 'Transparent reframing must encode a new PNG at the selected size')
   const photo = app.frame.value.photo
   assert.deepEqual(exportDraws.at(-1).slice(1), [photo.x, photo.y, photo.width, photo.height], 'Export uses the exact preview rectangle')
+  await app.selectFrameAnchor('bottom')
+  const bottomPhoto = app.frame.value.photo
+  assert.equal(bottomPhoto.y + bottomPhoto.height, app.frame.value.height)
+  assert.deepEqual(exportDraws.at(-1).slice(1), [bottomPhoto.x, bottomPhoto.y, bottomPhoto.width, bottomPhoto.height], 'Preview and PNG share the bottom anchor')
+  assert.equal(workers.length, 3, 'Moving the photo must not run the model')
   app.framePlacement.value = 'fill'
   await app.changeFrame()
   assert.ok(app.frame.value.photo.x < 0, 'Fill crops the wider source')
   await app.resetFrame()
   assert.equal(app.frameRatio.value, 'original')
+  assert.equal(app.frameAnchor.value, 'center')
   assert.equal(app.frame.value.width, 2000)
   const previous = workers[0]
   assert.equal(previous.onmessage, null)
@@ -173,6 +179,7 @@ test('successive photos get new workers after releasing prior image resources', 
   assert.equal(app.showOriginal.value, false)
   assert.equal(app.showPhotoBounds.value, false)
   assert.equal(app.frameOptionsOpen.value, false)
+  assert.equal(app.frameAnchor.value, 'center')
   assert.equal(app.fileName.value, '')
   assert.equal(app.canRetry.value, false)
   assert.equal(urls.size, 0, 'Start over must revoke preview and export URLs')

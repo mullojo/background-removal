@@ -1,7 +1,7 @@
 import { createApp, computed, nextTick, onMounted, onUnmounted, ref } from './vendor/vue-3.5.43.esm-browser.prod.js'
 import { APP_VERSION, createDiagnostics } from './diagnostics.js'
 import { createMemoryTracker, browserMemory, memoryMB } from './memory.js'
-import { FRAME_RATIOS, outputFrame } from './output-frame.js'
+import { FRAME_RATIOS, FRAME_ANCHORS, outputFrame } from './output-frame.js'
 import { createPwa } from './pwa.js'
 import { useDeveloperPreview } from './developer-preview.js'
 import { GivingPanel } from './giving-ui.js'
@@ -37,6 +37,8 @@ createApp({
     const sourceSize = ref({ width: 1, height: 1 })
     const frameRatio = ref('original')
     const framePlacement = ref('fit')
+    const frameAnchor = ref('center')
+    const currentAnchor = computed(() => FRAME_ANCHORS.find(anchor => anchor.id === frameAnchor.value) || FRAME_ANCHORS[4])
     const showPhotoBounds = ref(false)
     const frameOptionsOpen = ref(false)
     const frameOptions = computed(() => FRAME_RATIOS.map(option => {
@@ -45,7 +47,7 @@ createApp({
       const height = 26 / Math.max(1, ratio)
       return { ...option, symbol: { x: (36 - width) / 2, y: (36 - height) / 2, width, height } }
     }))
-    const frame = computed(() => outputFrame(sourceSize.value.width, sourceSize.value.height, frameRatio.value, framePlacement.value))
+    const frame = computed(() => outputFrame(sourceSize.value.width, sourceSize.value.height, frameRatio.value, framePlacement.value, frameAnchor.value))
     const outputDimensions = computed(() => `${frame.value.width.toLocaleString()} × ${frame.value.height.toLocaleString()} px`)
     const frameChanged = computed(() => frameRatio.value !== 'original')
     const originalUrl = ref('')
@@ -115,6 +117,11 @@ createApp({
       showPhotoBounds.value = true
       return updateExport()
     }
+    function selectFrameAnchor(id) {
+      if (busy.value || shareBusy.value || studio.batchRunning.value || studio.presetSaving.value || studio.archiveBusy.value || studio.finishingBusy.value) return
+      frameAnchor.value = id
+      return updateExport()
+    }
     function changeFrame() {
       if (busy.value || shareBusy.value || studio.batchRunning.value || studio.finishingBusy.value) return
       return updateExport()
@@ -122,6 +129,7 @@ createApp({
     function resetFrame() {
       frameRatio.value = 'original'
       framePlacement.value = 'fit'
+      frameAnchor.value = 'center'
       return changeFrame()
     }
 
@@ -231,6 +239,7 @@ createApp({
       sourceSize.value = { width: 1, height: 1 }
       frameRatio.value = 'original'
       framePlacement.value = 'fit'
+      frameAnchor.value = 'center'
       showPhotoBounds.value = false
     }
 
@@ -677,6 +686,7 @@ createApp({
           const geometry = frame.value
           const ratio = frameRatio.value
           const placement = framePlacement.value
+          const anchor = frameAnchor.value
           const reframed = ratio !== 'original'
           let canvas = cutoutCanvas
           mark('encoding-export', { backdrop: choice.id })
@@ -712,7 +722,7 @@ createApp({
             }
             const blob = choice.kind === 'transparent' && !reframed ? cutoutBlob : await new Promise(resolve => canvas.toBlob(resolve, 'image/png'))
             if (!blob) throw new Error('Could not export this image. Try a smaller photo.')
-            if (currentResult !== resultUrl.value || choice.id !== selected.value || ratio !== frameRatio.value || placement !== framePlacement.value) continue
+            if (currentResult !== resultUrl.value || choice.id !== selected.value || ratio !== frameRatio.value || placement !== framePlacement.value || anchor !== frameAnchor.value) continue
             exportThumbnail = studio.batchRunning.value ? (await createPreview(canvas, 240)).blob : null
             revoke(exportUrl.value)
             exportUrl.value = URL.createObjectURL(blob)
@@ -787,7 +797,7 @@ createApp({
     return { imageMemory, browserMemoryState, refreshMemory, memoryMB, ...studio, ...developer, updateSupporter, openGiving, givingOpen, getDiagnostics, CACHE_KEY, choices, fileInput, fileName, dimensions, originalUrl, resultUrl, exportUrl,
   selected, phase, backend, modelLoaded, downloadFile, downloadProgress, statusDetail, error,
   dragOver, showOriginal, cacheFiles, cacheBytes, cacheAvailable, origin,
-  busy, currentChoice, exportName, stageText, cacheSize, frameOptions, frameOptionsOpen, selectFrameRatio, workspaceBackdrop, frame, frameRatio, framePlacement, frameChanged, showPhotoBounds, outputDimensions, changeFrame, resetFrame,
+  busy, currentChoice, exportName, stageText, cacheSize, FRAME_ANCHORS, frameAnchor, currentAnchor, selectFrameAnchor, frameOptions, frameOptionsOpen, selectFrameRatio, workspaceBackdrop, frame, frameRatio, framePlacement, frameChanged, showPhotoBounds, outputDimensions, changeFrame, resetFrame,
   refreshCache, clearCache, loadModel, acceptFile, onFileChange, onDrop, clearImage,
   selectBackground, shareImage, shareBusy, canShareFile, exportMessage, exportBusy,
   copyDiagnostics, diagnosticText, diagnosticMessage, interruptedNotice, cancelRun, retryWasm, previewError, preferWasm, canRetry, APP_VERSION,

@@ -118,7 +118,18 @@
                 <div class="grid grid-cols-2 gap-1 rounded-xl border border-line bg-white p-1" role="group" aria-label="Photo placement">
                   <button v-for="mode in ['fit', 'fill']" :key="mode" class="min-h-11 rounded-lg border-0 px-2 text-xs font-semibold" :class="framePlacement === mode ? 'bg-forest text-white' : 'bg-white text-muted'" :aria-pressed="framePlacement === mode" @click="framePlacement = mode; changeFrame()">{{ mode === 'fit' ? 'Fit whole photo' : 'Crop to fill' }}</button>
                 </div>
-                <p class="mt-2 mb-0 text-[11px] leading-relaxed text-muted">{{ framePlacement === 'fit' ? 'Keeps the whole photo centered. Your backdrop fills any extra space.' : 'Centers and crops the photo to fill the frame. Edges may be trimmed.' }}</p>
+                <p class="mt-2 mb-0 text-[11px] leading-relaxed text-muted">{{ framePlacement === 'fit' ? 'Keeps the whole photo. Your backdrop fills any extra space.' : 'Crops the photo to fill the frame. Choose which edge to keep below.' }}</p>
+              </div>
+              <div v-if="frameChanged" class="mt-4 flex flex-wrap items-center gap-4 border-t border-line pt-4">
+                <div class="grid shrink-0 grid-cols-3 gap-1 rounded-xl border border-line bg-white p-1" role="group" aria-label="Photo anchor">
+                  <button v-for="anchor in FRAME_ANCHORS" :key="anchor.id" :title="anchor.label" :aria-label="'Align ' + anchor.label.toLowerCase()" :aria-pressed="frameAnchor === anchor.id" class="flex size-11 items-center justify-center rounded-lg border-0 transition-colors disabled:opacity-50" :class="frameAnchor === anchor.id ? 'bg-forest text-white' : 'bg-white text-muted hover:bg-paper hover:text-clay'" @click="selectFrameAnchor(anchor.id)">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2" stroke="currentColor" stroke-width="1" opacity=".45" /><rect :x="5 + anchor.x * 8" :y="5 + anchor.y * 8" width="6" height="6" rx="1" fill="currentColor" /></svg>
+                  </button>
+                </div>
+                <div class="min-w-0 flex-1 basis-28">
+                  <h4 class="m-0 text-xs font-semibold">Anchor photo <span class="font-normal text-muted">· {{ currentAnchor.label }}</span></h4>
+                  <p class="mt-2 mb-0 text-[11px] leading-relaxed text-muted">Keep a flat edge against the frame. Choose Bottom for a portrait cut off at the waist, or any other edge or corner.</p>
+                </div>
               </div>
               <p class="mt-3 mb-0 text-[11px] leading-relaxed text-muted">The backdrop fills your workspace. Turn on Download outline to see the exact saved area{{ frameChanged ? '' : ' — your original photo dimensions' }}. Guides won’t appear in your PNG.</p>
               <div class="mt-3 flex items-center justify-between gap-3 border-t border-line pt-3 text-xs"><span class="text-muted" aria-live="polite">{{ outputDimensions }} · PNG</span><button v-if="frameChanged" class="min-h-11 border-0 bg-transparent px-2 font-semibold text-clay" @click="resetFrame">Reset size</button></div>

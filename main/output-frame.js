@@ -11,7 +11,20 @@ export const FRAME_RATIOS = [
   { id: '16:9', label: 'Wide · 16:9', ratio: 16 / 9 },
 ]
 
-export function outputFrame(sourceWidth, sourceHeight, ratioId = 'original', placement = 'fit') {
+// Anchors work for both added space (fit) and which edge survives a crop (fill).
+export const FRAME_ANCHORS = [
+  { id: 'top-left', label: 'Top left', x: 0, y: 0 },
+  { id: 'top', label: 'Top', x: .5, y: 0 },
+  { id: 'top-right', label: 'Top right', x: 1, y: 0 },
+  { id: 'left', label: 'Left', x: 0, y: .5 },
+  { id: 'center', label: 'Center', x: .5, y: .5 },
+  { id: 'right', label: 'Right', x: 1, y: .5 },
+  { id: 'bottom-left', label: 'Bottom left', x: 0, y: 1 },
+  { id: 'bottom', label: 'Bottom', x: .5, y: 1 },
+  { id: 'bottom-right', label: 'Bottom right', x: 1, y: 1 },
+]
+
+export function outputFrame(sourceWidth, sourceHeight, ratioId = 'original', placement = 'fit', anchorId = 'center') {
   const originalWidth = Math.max(1, sourceWidth)
   const originalHeight = Math.max(1, sourceHeight)
   const ratio = FRAME_RATIOS.find(item => item.id === ratioId)?.ratio
@@ -26,8 +39,9 @@ export function outputFrame(sourceWidth, sourceHeight, ratioId = 'original', pla
   const scale = (placement === 'fill' ? Math.max : Math.min)(width / originalWidth, height / originalHeight)
   const photoWidth = originalWidth * scale
   const photoHeight = originalHeight * scale
+  const anchor = FRAME_ANCHORS.find(item => item.id === anchorId) || FRAME_ANCHORS[4]
   return {
     width, height,
-    photo: { x: (width - photoWidth) / 2, y: (height - photoHeight) / 2, width: photoWidth, height: photoHeight },
+    photo: { x: (width - photoWidth) * anchor.x, y: (height - photoHeight) * anchor.y, width: photoWidth, height: photoHeight },
   }
 }

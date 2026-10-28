@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.7.0 — 2026-10-27
+
+- Add a compact, visual nine-position photo-anchor control under Output frame.
+  Align the original photo to the top, bottom, sides, or corners so a cut-off edge
+  can meet the output boundary. Center remains the default.
+- Apply the anchor to both fit and crop placement using the same geometry for
+  previews, downloads, and native sharing. Preserve the source so alignment can
+  change without rerunning inference or accumulating edits.
+- Reset anchors with the frame or a new photo. Cover bottom-edge fitting, crop
+  edges, corners, matching export placement, and worker reuse prevention in tests.
+
 ## 1.6.1 — 2026-10-27
 
 - Replace the output-ratio dropdown with a one-click expandable panel and eight
