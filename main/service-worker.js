@@ -1,5 +1,5 @@
 // Generated release value; bump VERSION with scripts/release.mjs.
-const RELEASE = '1.6.0'
+const RELEASE = '1.6.1'
 const PREFIX = `cutout-shell:${new URL(self.registration.scope).pathname}:`
 const CACHE = `${PREFIX}${RELEASE}`
 const FILES = [

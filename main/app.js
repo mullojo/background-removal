@@ -38,6 +38,13 @@ createApp({
     const frameRatio = ref('original')
     const framePlacement = ref('fit')
     const showPhotoBounds = ref(false)
+    const frameOptionsOpen = ref(false)
+    const frameOptions = computed(() => FRAME_RATIOS.map(option => {
+      const ratio = option.ratio || sourceSize.value.width / sourceSize.value.height
+      const width = 26 * Math.min(1, ratio)
+      const height = 26 / Math.max(1, ratio)
+      return { ...option, symbol: { x: (36 - width) / 2, y: (36 - height) / 2, width, height } }
+    }))
     const frame = computed(() => outputFrame(sourceSize.value.width, sourceSize.value.height, frameRatio.value, framePlacement.value))
     const outputDimensions = computed(() => `${frame.value.width.toLocaleString()} × ${frame.value.height.toLocaleString()} px`)
     const frameChanged = computed(() => frameRatio.value !== 'original')
@@ -95,6 +102,19 @@ createApp({
     const exportName = computed(() => `${fileName.value.replace(/\.[^.]+$/, '') || 'image'}-${currentChoice.value.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'backdrop'}.png`)
     const stageText = computed(() => exportBusy.value ? 'Preparing download' : ({ idle: 'Model not loaded', offline: 'Connection needed', preparing: 'Preparing photo', loading: 'Loading model', ready: 'Model ready', processing: 'Removing background', compositing: 'Finishing image', complete: 'Image ready', error: 'Needs attention' })[phase.value])
     const cacheSize = computed(() => !cacheSizeKnown.value ? 'Size unavailable' : `${(cacheBytes.value / 1048576).toFixed(1)} MB`)
+    const workspaceBackdrop = computed(() => {
+      const choice = currentChoice.value
+      if (choice.kind === 'solid') return { background: choice.color }
+      if (choice.kind === 'gradient') return { background: `linear-gradient(135deg, ${choice.colors.join(', ')})` }
+      if (choice.kind === 'image') return { backgroundImage: `url("${choice.url}")`, backgroundSize: 'cover', backgroundPosition: 'center' }
+      return {}
+    })
+    function selectFrameRatio(id) {
+      if (busy.value || shareBusy.value || studio.batchRunning.value || studio.presetSaving.value || studio.archiveBusy.value || studio.finishingBusy.value) return
+      frameRatio.value = id
+      showPhotoBounds.value = true
+      return updateExport()
+    }
     function changeFrame() {
       if (busy.value || shareBusy.value || studio.batchRunning.value || studio.finishingBusy.value) return
       return updateExport()
@@ -207,6 +227,7 @@ createApp({
       showOriginal.value = false
       fileName.value = ''
       dimensions.value = ''
+      frameOptionsOpen.value = false
       sourceSize.value = { width: 1, height: 1 }
       frameRatio.value = 'original'
       framePlacement.value = 'fit'
@@ -766,7 +787,7 @@ createApp({
     return { imageMemory, browserMemoryState, refreshMemory, memoryMB, ...studio, ...developer, updateSupporter, openGiving, givingOpen, getDiagnostics, CACHE_KEY, choices, fileInput, fileName, dimensions, originalUrl, resultUrl, exportUrl,
   selected, phase, backend, modelLoaded, downloadFile, downloadProgress, statusDetail, error,
   dragOver, showOriginal, cacheFiles, cacheBytes, cacheAvailable, origin,
-  busy, currentChoice, exportName, stageText, cacheSize, FRAME_RATIOS, frame, frameRatio, framePlacement, frameChanged, showPhotoBounds, outputDimensions, changeFrame, resetFrame,
+  busy, currentChoice, exportName, stageText, cacheSize, frameOptions, frameOptionsOpen, selectFrameRatio, workspaceBackdrop, frame, frameRatio, framePlacement, frameChanged, showPhotoBounds, outputDimensions, changeFrame, resetFrame,
   refreshCache, clearCache, loadModel, acceptFile, onFileChange, onDrop, clearImage,
   selectBackground, shareImage, shareBusy, canShareFile, exportMessage, exportBusy,
   copyDiagnostics, diagnosticText, diagnosticMessage, interruptedNotice, cancelRun, retryWasm, previewError, preferWasm, canRetry, APP_VERSION,

@@ -147,8 +147,8 @@ test('successive photos get new workers after releasing prior image resources', 
   }
   assert.equal(preparingExports, 3)
   // Reframe the already processed photo without touching inference or source.
-  app.frameRatio.value = '16:9'
-  await app.changeFrame()
+  await app.selectFrameRatio('16:9')
+  assert.equal(app.showPhotoBounds.value, true, 'Picking a ratio immediately reveals its saved boundaries')
   assert.equal(workers.length, 3)
   assert.equal(app.frame.value.width, 1885)
   assert.equal(app.frame.value.height, 1060)
@@ -166,10 +166,13 @@ test('successive photos get new workers after releasing prior image resources', 
   previous.originalHandler({ data: { type: 'error', message: 'Late old-worker error' } })
   assert.equal(app.phase.value, 'complete')
   app.showOriginal.value = true
+  app.frameOptionsOpen.value = true
   app.clearImage()
   await new Promise(resolve => setImmediate(resolve))
   assert.equal(app.phase.value, 'idle')
   assert.equal(app.showOriginal.value, false)
+  assert.equal(app.showPhotoBounds.value, false)
+  assert.equal(app.frameOptionsOpen.value, false)
   assert.equal(app.fileName.value, '')
   assert.equal(app.canRetry.value, false)
   assert.equal(urls.size, 0, 'Start over must revoke preview and export URLs')

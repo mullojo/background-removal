@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.6.1 — 2026-10-27
+
+- Replace the output-ratio dropdown with a one-click expandable panel and eight
+  directly selectable ratio tiles, each with a proportional rectangle symbol.
+- Restore the backdrop across the whole workspace by default. Add a separate
+  Download outline button to reveal the actual PNG boundary; original dimensions
+  remain the default. Selecting a ratio automatically reveals its boundary.
+- Keep fit/crop and reset actions directly available in the expanded panel.
+  Outlined previews show the exact background crop and download area; guides
+  never appear in exports. Preserve frame reset and worker cleanup behavior.
+
 ## 1.6.0 — 2026-10-27
 
 - Add optional Output frame controls beneath the single-photo preview, collapsed

@@ -62,7 +62,7 @@
       <div class="workspace">
         <section class="editor-panel" aria-label="Image editor">
           <div class="panel-head"><div><span class="section-index">01 / CANVAS</span><h2>Your workspace</h2></div><span class="panel-caption">{{ dimensions || 'READY WHEN YOU ARE' }}</span></div>
-          <div class="stage" :class="{ 'stage-drag': dragOver, 'stage-empty': !originalUrl }" @dragover.prevent="dragOver = true" @dragleave.prevent="dragOver = false" @drop.prevent="onDrop">
+          <div class="stage" :class="{ 'stage-drag': dragOver, 'stage-empty': !originalUrl }" :style="resultUrl && !showOriginal ? workspaceBackdrop : {}" @dragover.prevent="dragOver = true" @dragleave.prevent="dragOver = false" @drop.prevent="onDrop">
             <div v-if="!originalUrl" class="empty-state">
               <div class="empty-icon"><svg viewBox="0 0 48 48" fill="none" aria-hidden="true"><rect x="6" y="7" width="36" height="34" rx="4" stroke="currentColor" stroke-width="1.6"/><circle cx="17" cy="18" r="3" stroke="currentColor" stroke-width="1.6"/><path d="m8 34 11-11 7 7 5-5 9 9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
               <h3>Drop your image here</h3><p>or choose a photo to get started</p>
@@ -70,52 +70,62 @@
               <small>JPG, PNG, WebP · One image at a time</small>
             </div>
             <template v-else>
-              <svg class="block h-full w-full" :view-box.camel="`0 0 ${frame.width} ${frame.height}`" role="img" :aria-label="resultUrl && !showOriginal ? 'Output preview, ' + outputDimensions : 'Original photo in output frame'">
+              <div v-if="resultUrl && !showOriginal && selected === 'transparent'" class="checkerboard"></div>
+              <svg class="relative z-[1] block h-full w-full" :view-box.camel="`0 0 ${frame.width} ${frame.height}`" role="img" :aria-label="resultUrl && !showOriginal ? 'Output preview, ' + outputDimensions : 'Original photo in output frame'">
                 <defs>
                   <clipPath id="output-clip"><rect :width="frame.width" :height="frame.height" /></clipPath>
                   <pattern id="output-checker" width="24" height="24" patternUnits="userSpaceOnUse" :pattern-transform.camel="`scale(${Math.max(frame.width, frame.height) / 800})`"><rect width="24" height="24" fill="#f7f8f5" /><path d="M0 0h12v12H0zM12 12h12v12H12z" fill="#e9ece8" /></pattern>
                   <linearGradient id="output-gradient" x1="0" y1="0" x2="1" y2="1" gradientUnits="objectBoundingBox"><stop :stop-color="currentChoice.colors?.[0] || '#ffffff'" /><stop offset="1" :stop-color="currentChoice.colors?.[1] || '#ffffff'" /></linearGradient>
                 </defs>
                 <g clip-path="url(#output-clip)">
-                  <rect :width="frame.width" :height="frame.height" fill="url(#output-checker)" />
-                  <template v-if="resultUrl && !showOriginal">
+                  <rect v-if="showPhotoBounds || showOriginal || !resultUrl" :width="frame.width" :height="frame.height" fill="url(#output-checker)" />
+                  <template v-if="resultUrl && !showOriginal && showPhotoBounds">
                     <rect v-if="currentChoice.kind === 'solid' || currentChoice.kind === 'gradient'" :width="frame.width" :height="frame.height" :fill="currentChoice.kind === 'solid' ? currentChoice.color : 'url(#output-gradient)'" />
                     <image v-if="currentChoice.kind === 'image'" :href="currentChoice.url" :width="frame.width" :height="frame.height" preserveAspectRatio="xMidYMid slice" />
                   </template>
                   <image :href="resultUrl && !showOriginal ? resultUrl : originalUrl" :x="frame.photo.x" :y="frame.photo.y" :width="frame.photo.width" :height="frame.photo.height" preserveAspectRatio="none" @error="previewError" />
-                  <g v-if="showPhotoBounds" fill="none" pointer-events="none">
-                    <rect :x="frame.photo.x" :y="frame.photo.y" :width="frame.photo.width" :height="frame.photo.height" stroke="white" stroke-width="5" vector-effect="non-scaling-stroke" />
-                    <rect :x="frame.photo.x" :y="frame.photo.y" :width="frame.photo.width" :height="frame.photo.height" stroke="#ae5f45" stroke-width="2" stroke-dasharray="6 4" vector-effect="non-scaling-stroke" />
-                  </g>
+                </g>
+                <g v-if="showPhotoBounds" fill="none" pointer-events="none">
+                  <rect :width="frame.width" :height="frame.height" stroke="white" stroke-width="5" vector-effect="non-scaling-stroke" />
+                  <rect :width="frame.width" :height="frame.height" stroke="#ae5f45" stroke-width="2" stroke-dasharray="6 4" vector-effect="non-scaling-stroke" />
                 </g>
               </svg>
               <div v-if="busy" class="processing-shade"><span class="spinner"></span><strong>{{ stageText }}</strong><small>{{ statusDetail }}</small></div>
               <span class="image-badge">{{ resultUrl && !showOriginal ? 'AFTER' : 'BEFORE' }}</span>
             </template>
           </div>
-          <details v-if="resultUrl" class="mt-4 rounded-xl border border-line bg-paper p-3 sm:p-4">
-            <summary class="flex min-h-11 cursor-pointer items-center justify-between gap-3 text-xs font-semibold">
-              <span>Output frame <span class="ml-1 font-normal text-muted">⌄</span></span><span class="font-normal text-muted">{{ frameChanged ? frameRatio : 'Original size' }}</span>
-            </summary>
+          <section v-if="resultUrl" class="mt-4" aria-label="Output framing">
+            <div class="flex flex-wrap items-center justify-between gap-2">
+              <button class="inline-flex min-h-11 items-center gap-2 rounded-xl border px-3 text-xs font-semibold" :class="frameOptionsOpen ? 'border-forest bg-forest text-white' : 'border-line bg-paper text-forest'" :aria-expanded="frameOptionsOpen" aria-controls="output-frame-options" @click="frameOptionsOpen = !frameOptionsOpen">
+                <svg width="18" height="18" viewBox="0 0 20 20" fill="none" aria-hidden="true"><rect x="2.5" y="4" width="15" height="12" rx="2" stroke="currentColor" stroke-width="1.5" /><path d="M6 2v4m8 8v4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" /></svg>
+                Output frame <span class="font-normal opacity-70">{{ frameChanged ? frameRatio : 'Original' }}</span><span aria-hidden="true">{{ frameOptionsOpen ? '−' : '+' }}</span>
+              </button>
+              <button class="inline-flex min-h-11 items-center gap-2 rounded-xl border px-3 text-xs font-medium" :class="showPhotoBounds ? 'border-clay bg-orange-50 text-clay' : 'border-line bg-white text-muted'" :aria-pressed="showPhotoBounds" @click="showPhotoBounds = !showPhotoBounds">
+                <svg width="18" height="18" viewBox="0 0 20 20" fill="none" aria-hidden="true"><rect x="3" y="3" width="14" height="14" rx="1" stroke="currentColor" stroke-width="1.5" stroke-dasharray="3 2" /></svg>
+                Download outline
+              </button>
+            </div>
+            <div v-if="frameOptionsOpen" id="output-frame-options" class="mt-3 rounded-xl border border-line bg-paper p-3 sm:p-4">
             <fieldset class="m-0 min-w-0 border-0 p-0" :disabled="busy || shareBusy || batchRunning || presetSaving || archiveBusy || finishingBusy">
-              <p class="mt-1 mb-4 text-xs leading-relaxed text-muted">Try a new shape for this photo. The preview shows exactly what you’ll download.</p>
-              <label class="block text-xs font-semibold">Aspect ratio
-                <select aria-label="Aspect ratio" v-model="frameRatio" @change="changeFrame" class="mt-2 block min-h-11 w-full rounded-lg border border-line bg-white px-3 text-sm font-normal text-forest">
-                  <option v-for="ratio in FRAME_RATIOS" :key="ratio.id" :value="ratio.id">{{ ratio.label }}</option>
-                </select>
-              </label>
+              <legend class="text-xs font-semibold">Choose a shape</legend>
+              <div class="mt-3 grid grid-cols-4 gap-2" role="group" aria-label="Aspect ratio">
+                <button v-for="option in frameOptions" :key="option.id" :title="option.label" :aria-label="option.label" :aria-pressed="frameRatio === option.id" class="flex min-h-20 min-w-0 flex-col items-center justify-center gap-1 rounded-xl border px-1 py-2 text-[11px] font-semibold transition-colors disabled:opacity-50" :class="frameRatio === option.id ? 'border-forest bg-forest text-white' : 'border-line bg-white text-muted hover:border-clay hover:text-clay'" @click="selectFrameRatio(option.id)">
+                  <svg width="36" height="36" viewBox="0 0 36 36" fill="none" aria-hidden="true"><rect :x="option.symbol.x" :y="option.symbol.y" :width="option.symbol.width" :height="option.symbol.height" rx="2" stroke="currentColor" stroke-width="1.5" /></svg>
+                  <span>{{ option.id === 'original' ? 'Original' : option.id }}</span>
+                </button>
+              </div>
               <div v-if="frameChanged" class="mt-3">
                 <div class="grid grid-cols-2 gap-1 rounded-xl border border-line bg-white p-1" role="group" aria-label="Photo placement">
                   <button v-for="mode in ['fit', 'fill']" :key="mode" class="min-h-11 rounded-lg border-0 px-2 text-xs font-semibold" :class="framePlacement === mode ? 'bg-forest text-white' : 'bg-white text-muted'" :aria-pressed="framePlacement === mode" @click="framePlacement = mode; changeFrame()">{{ mode === 'fit' ? 'Fit whole photo' : 'Crop to fill' }}</button>
                 </div>
                 <p class="mt-2 mb-0 text-[11px] leading-relaxed text-muted">{{ framePlacement === 'fit' ? 'Keeps the whole photo centered. Your backdrop fills any extra space.' : 'Centers and crops the photo to fill the frame. Edges may be trimmed.' }}</p>
               </div>
-              <label class="mt-3 flex min-h-11 cursor-pointer items-center gap-3 text-xs"><input v-model="showPhotoBounds" type="checkbox" class="size-4 accent-clay">Show original photo outline</label>
-              <p v-if="showPhotoBounds" class="mt-0 text-[11px] leading-relaxed text-muted">Dashed lines mark the original photo bounds inside the output. The outline is a guide and won’t be downloaded.</p>
+              <p class="mt-3 mb-0 text-[11px] leading-relaxed text-muted">The backdrop fills your workspace. Turn on Download outline to see the exact saved area{{ frameChanged ? '' : ' — your original photo dimensions' }}. Guides won’t appear in your PNG.</p>
               <div class="mt-3 flex items-center justify-between gap-3 border-t border-line pt-3 text-xs"><span class="text-muted" aria-live="polite">{{ outputDimensions }} · PNG</span><button v-if="frameChanged" class="min-h-11 border-0 bg-transparent px-2 font-semibold text-clay" @click="resetFrame">Reset size</button></div>
               <p class="mt-1 mb-0 text-[10px] leading-relaxed text-muted">New shapes stay within your photo’s pixel budget. Changing the photo resets its frame. Batch photos keep their original size.</p>
             </fieldset>
-          </details>
+            </div>
+          </section>
           <div v-if="originalUrl || canRetry" class="canvas-footer">
             <div class="canvas-actions">
               <button v-if="resultUrl" class="canvas-button compare-button" :class="{ 'is-active': showOriginal }" :aria-pressed="showOriginal" :disabled="busy || shareBusy || batchRunning || presetSaving || archiveBusy || finishingBusy" @click="showOriginal = !showOriginal" @contextmenu.prevent>

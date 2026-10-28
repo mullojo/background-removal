@@ -14,12 +14,13 @@ and Transformers.js.
 ## Optional output framing
 
 After processing a photo, open **Output frame** below the preview to try a new
-aspect ratio. Choose **Fit whole photo** to keep it all, or **Crop to fill** to
+aspect ratio with one tap on a visual ratio tile. Choose **Fit whole photo** to keep it all, or **Crop to fill** to
 center-crop. Backdrops fill the selected output frame, and the shown pixel size
 matches the PNG download and shared image.
 
-Enable **Show original photo outline** to see the original photo bounds. This
-is a preview guide only. **Reset size** returns to the original dimensions;
+The backdrop fills the workspace by default. Toggle **Download outline** beside
+Output frame to see the exact saved area (the original photo bounds by default).
+Selecting a new ratio reveals its outline automatically. This is a preview guide only. **Reset size** returns to the original dimensions;
 changing photos resets framing too. New frames stay within the source pixel
 budget and longest edge. Batch photos continue using their original dimensions.
 
