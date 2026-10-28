@@ -217,6 +217,7 @@ test('offline uploads wait for connectivity and model readiness; worker failures
   vm.runInContext(fs.readFileSync(path.join(root, 'main/memory.js'), 'utf8').replaceAll('export ', ''), context)
   vm.runInContext(fs.readFileSync(path.join(root, 'main/developer-preview.js'), 'utf8').replace(/^import .*\n/gm, '').replaceAll('export ', ''), context)
   vm.runInContext(fs.readFileSync(path.join(root, 'main/supporter-studio.js'), 'utf8').replace(/^import .*\n/gm, '').replaceAll('export ', ''), context)
+  vm.runInContext(fs.readFileSync(path.join(root, 'main/output-frame.js'), 'utf8').replaceAll('export ', ''), context)
   vm.runInContext(source, context)
   assert.equal(workers.length, 0)
   assert.equal(app.phase.value, 'offline')

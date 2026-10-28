@@ -62,7 +62,7 @@
       <div class="workspace">
         <section class="editor-panel" aria-label="Image editor">
           <div class="panel-head"><div><span class="section-index">01 / CANVAS</span><h2>Your workspace</h2></div><span class="panel-caption">{{ dimensions || 'READY WHEN YOU ARE' }}</span></div>
-          <div class="stage" :class="{ 'stage-drag': dragOver, 'stage-empty': !originalUrl }" :style="resultUrl && !showOriginal ? previewStyle : {}" @dragover.prevent="dragOver = true" @dragleave.prevent="dragOver = false" @drop.prevent="onDrop">
+          <div class="stage" :class="{ 'stage-drag': dragOver, 'stage-empty': !originalUrl }" @dragover.prevent="dragOver = true" @dragleave.prevent="dragOver = false" @drop.prevent="onDrop">
             <div v-if="!originalUrl" class="empty-state">
               <div class="empty-icon"><svg viewBox="0 0 48 48" fill="none" aria-hidden="true"><rect x="6" y="7" width="36" height="34" rx="4" stroke="currentColor" stroke-width="1.6"/><circle cx="17" cy="18" r="3" stroke="currentColor" stroke-width="1.6"/><path d="m8 34 11-11 7 7 5-5 9 9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
               <h3>Drop your image here</h3><p>or choose a photo to get started</p>
@@ -70,12 +70,52 @@
               <small>JPG, PNG, WebP · One image at a time</small>
             </div>
             <template v-else>
-              <div v-if="resultUrl && !showOriginal && selected === 'transparent'" class="checkerboard"></div>
-              <img class="stage-image" :src="resultUrl && !showOriginal ? resultUrl : originalUrl" :alt="resultUrl && !showOriginal ? 'Photo with background removed' : 'Original uploaded photo'" @error="previewError" />
+              <svg class="block h-full w-full" :view-box.camel="`0 0 ${frame.width} ${frame.height}`" role="img" :aria-label="resultUrl && !showOriginal ? 'Output preview, ' + outputDimensions : 'Original photo in output frame'">
+                <defs>
+                  <clipPath id="output-clip"><rect :width="frame.width" :height="frame.height" /></clipPath>
+                  <pattern id="output-checker" width="24" height="24" patternUnits="userSpaceOnUse" :pattern-transform.camel="`scale(${Math.max(frame.width, frame.height) / 800})`"><rect width="24" height="24" fill="#f7f8f5" /><path d="M0 0h12v12H0zM12 12h12v12H12z" fill="#e9ece8" /></pattern>
+                  <linearGradient id="output-gradient" x1="0" y1="0" x2="1" y2="1" gradientUnits="objectBoundingBox"><stop :stop-color="currentChoice.colors?.[0] || '#ffffff'" /><stop offset="1" :stop-color="currentChoice.colors?.[1] || '#ffffff'" /></linearGradient>
+                </defs>
+                <g clip-path="url(#output-clip)">
+                  <rect :width="frame.width" :height="frame.height" fill="url(#output-checker)" />
+                  <template v-if="resultUrl && !showOriginal">
+                    <rect v-if="currentChoice.kind === 'solid' || currentChoice.kind === 'gradient'" :width="frame.width" :height="frame.height" :fill="currentChoice.kind === 'solid' ? currentChoice.color : 'url(#output-gradient)'" />
+                    <image v-if="currentChoice.kind === 'image'" :href="currentChoice.url" :width="frame.width" :height="frame.height" preserveAspectRatio="xMidYMid slice" />
+                  </template>
+                  <image :href="resultUrl && !showOriginal ? resultUrl : originalUrl" :x="frame.photo.x" :y="frame.photo.y" :width="frame.photo.width" :height="frame.photo.height" preserveAspectRatio="none" @error="previewError" />
+                  <g v-if="showPhotoBounds" fill="none" pointer-events="none">
+                    <rect :x="frame.photo.x" :y="frame.photo.y" :width="frame.photo.width" :height="frame.photo.height" stroke="white" stroke-width="5" vector-effect="non-scaling-stroke" />
+                    <rect :x="frame.photo.x" :y="frame.photo.y" :width="frame.photo.width" :height="frame.photo.height" stroke="#ae5f45" stroke-width="2" stroke-dasharray="6 4" vector-effect="non-scaling-stroke" />
+                  </g>
+                </g>
+              </svg>
               <div v-if="busy" class="processing-shade"><span class="spinner"></span><strong>{{ stageText }}</strong><small>{{ statusDetail }}</small></div>
               <span class="image-badge">{{ resultUrl && !showOriginal ? 'AFTER' : 'BEFORE' }}</span>
             </template>
           </div>
+          <details v-if="resultUrl" class="mt-4 rounded-xl border border-line bg-paper p-3 sm:p-4">
+            <summary class="flex min-h-11 cursor-pointer items-center justify-between gap-3 text-xs font-semibold">
+              <span>Output frame <span class="ml-1 font-normal text-muted">⌄</span></span><span class="font-normal text-muted">{{ frameChanged ? frameRatio : 'Original size' }}</span>
+            </summary>
+            <fieldset class="m-0 min-w-0 border-0 p-0" :disabled="busy || shareBusy || batchRunning || presetSaving || archiveBusy || finishingBusy">
+              <p class="mt-1 mb-4 text-xs leading-relaxed text-muted">Try a new shape for this photo. The preview shows exactly what you’ll download.</p>
+              <label class="block text-xs font-semibold">Aspect ratio
+                <select aria-label="Aspect ratio" v-model="frameRatio" @change="changeFrame" class="mt-2 block min-h-11 w-full rounded-lg border border-line bg-white px-3 text-sm font-normal text-forest">
+                  <option v-for="ratio in FRAME_RATIOS" :key="ratio.id" :value="ratio.id">{{ ratio.label }}</option>
+                </select>
+              </label>
+              <div v-if="frameChanged" class="mt-3">
+                <div class="grid grid-cols-2 gap-1 rounded-xl border border-line bg-white p-1" role="group" aria-label="Photo placement">
+                  <button v-for="mode in ['fit', 'fill']" :key="mode" class="min-h-11 rounded-lg border-0 px-2 text-xs font-semibold" :class="framePlacement === mode ? 'bg-forest text-white' : 'bg-white text-muted'" :aria-pressed="framePlacement === mode" @click="framePlacement = mode; changeFrame()">{{ mode === 'fit' ? 'Fit whole photo' : 'Crop to fill' }}</button>
+                </div>
+                <p class="mt-2 mb-0 text-[11px] leading-relaxed text-muted">{{ framePlacement === 'fit' ? 'Keeps the whole photo centered. Your backdrop fills any extra space.' : 'Centers and crops the photo to fill the frame. Edges may be trimmed.' }}</p>
+              </div>
+              <label class="mt-3 flex min-h-11 cursor-pointer items-center gap-3 text-xs"><input v-model="showPhotoBounds" type="checkbox" class="size-4 accent-clay">Show original photo outline</label>
+              <p v-if="showPhotoBounds" class="mt-0 text-[11px] leading-relaxed text-muted">Dashed lines mark the original photo bounds inside the output. The outline is a guide and won’t be downloaded.</p>
+              <div class="mt-3 flex items-center justify-between gap-3 border-t border-line pt-3 text-xs"><span class="text-muted" aria-live="polite">{{ outputDimensions }} · PNG</span><button v-if="frameChanged" class="min-h-11 border-0 bg-transparent px-2 font-semibold text-clay" @click="resetFrame">Reset size</button></div>
+              <p class="mt-1 mb-0 text-[10px] leading-relaxed text-muted">New shapes stay within your photo’s pixel budget. Changing the photo resets its frame. Batch photos keep their original size.</p>
+            </fieldset>
+          </details>
           <div v-if="originalUrl || canRetry" class="canvas-footer">
             <div class="canvas-actions">
               <button v-if="resultUrl" class="canvas-button compare-button" :class="{ 'is-active': showOriginal }" :aria-pressed="showOriginal" :disabled="busy || shareBusy || batchRunning || presetSaving || archiveBusy || finishingBusy" @click="showOriginal = !showOriginal" @contextmenu.prevent>
@@ -245,7 +285,7 @@
                 <button class="mt-3 min-h-11 w-full rounded-xl border border-line px-3 text-xs font-semibold text-clay" @click="openGiving">Support Cutout</button>
               </template>
             </details>
-            <div class="export-box"><div><strong>Ready for the final touch?</strong><span>Full resolution · PNG</span></div><div class="export-actions"><a v-if="exportUrl && !busy && !batchRunning" class="button button-accent" :href="exportUrl" :download="exportName">Download image</a><button v-else class="button button-accent" disabled>Download image</button><button v-if="canShareFile" class="button button-share" :disabled="busy || shareBusy || batchRunning || presetSaving || archiveBusy || finishingBusy" @click="shareImage">{{ shareBusy ? 'Sharing…' : 'Share / Save…' }}</button></div></div>
+            <div class="export-box"><div><strong>Ready for the final touch?</strong><span>{{ resultUrl ? outputDimensions : 'Full resolution' }} · PNG</span></div><div class="export-actions"><a v-if="exportUrl && !busy && !batchRunning" class="button button-accent" :href="exportUrl" :download="exportName">Download image</a><button v-else class="button button-accent" disabled>Download image</button><button v-if="canShareFile" class="button button-share" :disabled="busy || shareBusy || batchRunning || presetSaving || archiveBusy || finishingBusy" @click="shareImage">{{ shareBusy ? 'Sharing…' : 'Share / Save…' }}</button></div></div>
             <p v-if="canShareFile" class="section-description">On iPhone, choose Save Image in the share sheet to save to Photos when available.</p>
             <p v-if="exportMessage" class="section-description" role="status">{{ exportMessage }}</p>
           </div>

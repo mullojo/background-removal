@@ -52,6 +52,8 @@ test('successive photos get new workers after releasing prior image resources', 
   const mounted = [], workers = [], canvases = [], openBitmaps = new Set(), urls = new Map()
   let app, serial = 0, preparingExports = 0
   const batchReleases = []
+  const exportDraws = []
+  const exportSizes = []
   let rejectNextOutput = false
   class Worker {
     constructor() {
@@ -75,7 +77,7 @@ test('successive photos get new workers after releasing prior image resources', 
     }
   }
   const context2d = {
-    drawImage() {}, fillRect() {}, getImageData: () => ({ data: new Uint8ClampedArray(1024 * 1024 * 4) }),
+    drawImage(...args) { exportDraws.push(args) }, fillRect() {}, getImageData: () => ({ data: new Uint8ClampedArray(1024 * 1024 * 4) }),
     createImageData: (width, height) => ({ data: new Uint8ClampedArray(width * height * 4) }), putImageData() {},
   }
   const document = {
@@ -85,6 +87,7 @@ test('successive photos get new workers after releasing prior image resources', 
           assert.equal(openBitmaps.size, 0, 'Close full-size bitmaps before batch encoding')
           assert.ok(canvases.filter(item => item.width === 2000 && item.height === 1000).length <= 1, 'Batch encoding must never retain two full-resolution canvases')
         }
+        exportSizes.push([canvas.width, canvas.height])
         queueMicrotask(() => callback(new Blob(['PNG'])))
       } }
       canvases.push(canvas)
@@ -121,6 +124,7 @@ test('successive photos get new workers after releasing prior image resources', 
     },
     createApp: options => ({ mount() { app = options.setup(); mounted.forEach(fn => fn()) } }),
   })
+  vm.runInContext(fs.readFileSync(path.join(root, 'main/output-frame.js'), 'utf8').replaceAll('export ', ''), context)
   vm.runInContext(fs.readFileSync(path.join(root, 'main/memory.js'), 'utf8').replaceAll('export ', ''), context)
   vm.runInContext(fs.readFileSync(path.join(root, 'main/developer-preview.js'), 'utf8').replace(/^import .*\n/gm, '').replaceAll('export ', ''), context)
   vm.runInContext(fs.readFileSync(path.join(root, 'main/batch-finish.js'), 'utf8').replaceAll('export ', ''), context)
@@ -142,6 +146,21 @@ test('successive photos get new workers after releasing prior image resources', 
     if (oldURL) assert.ok(!urls.has(oldURL))
   }
   assert.equal(preparingExports, 3)
+  // Reframe the already processed photo without touching inference or source.
+  app.frameRatio.value = '16:9'
+  await app.changeFrame()
+  assert.equal(workers.length, 3)
+  assert.equal(app.frame.value.width, 1885)
+  assert.equal(app.frame.value.height, 1060)
+  assert.deepEqual(exportSizes.at(-1), [1885, 1060], 'Transparent reframing must encode a new PNG at the selected size')
+  const photo = app.frame.value.photo
+  assert.deepEqual(exportDraws.at(-1).slice(1), [photo.x, photo.y, photo.width, photo.height], 'Export uses the exact preview rectangle')
+  app.framePlacement.value = 'fill'
+  await app.changeFrame()
+  assert.ok(app.frame.value.photo.x < 0, 'Fill crops the wider source')
+  await app.resetFrame()
+  assert.equal(app.frameRatio.value, 'original')
+  assert.equal(app.frame.value.width, 2000)
   const previous = workers[0]
   assert.equal(previous.onmessage, null)
   previous.originalHandler({ data: { type: 'error', message: 'Late old-worker error' } })

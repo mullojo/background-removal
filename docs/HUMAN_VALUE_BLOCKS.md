@@ -253,3 +253,12 @@ removed detector-sensitive numeric markup, and disabled telephone auto-linking.
 Added compiler regression coverage, a safe interface refresh route, and deferred
 Tailwind loading. Continued within the rounded testing/reliability allocation; the ledger
 remains **26 VBs / $2,600** pending any later end-of-day adjustment.
+
+
+### October 27, 2026 · v1.6.0 output framing
+
+Added optional original-photo bounds, common output aspect ratios, fit/crop
+controls, matching previews and exports, and regression coverage. Bob continues
+monitoring and testing. This entry records the work; the next estimate update
+will allocate its value blocks. The currently estimated ledger remains
+**26 VBs / $2,600**.

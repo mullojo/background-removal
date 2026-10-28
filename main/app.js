@@ -1,6 +1,7 @@
 import { createApp, computed, nextTick, onMounted, onUnmounted, ref } from './vendor/vue-3.5.43.esm-browser.prod.js'
 import { APP_VERSION, createDiagnostics } from './diagnostics.js'
 import { createMemoryTracker, browserMemory, memoryMB } from './memory.js'
+import { FRAME_RATIOS, outputFrame } from './output-frame.js'
 import { createPwa } from './pwa.js'
 import { useDeveloperPreview } from './developer-preview.js'
 import { GivingPanel } from './giving-ui.js'
@@ -33,6 +34,13 @@ createApp({
     const fileInput = ref(null)
     const fileName = ref('')
     const dimensions = ref('')
+    const sourceSize = ref({ width: 1, height: 1 })
+    const frameRatio = ref('original')
+    const framePlacement = ref('fit')
+    const showPhotoBounds = ref(false)
+    const frame = computed(() => outputFrame(sourceSize.value.width, sourceSize.value.height, frameRatio.value, framePlacement.value))
+    const outputDimensions = computed(() => `${frame.value.width.toLocaleString()} × ${frame.value.height.toLocaleString()} px`)
+    const frameChanged = computed(() => frameRatio.value !== 'original')
     const originalUrl = ref('')
     const resultUrl = ref('')
     const exportUrl = ref('')
@@ -87,13 +95,15 @@ createApp({
     const exportName = computed(() => `${fileName.value.replace(/\.[^.]+$/, '') || 'image'}-${currentChoice.value.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'backdrop'}.png`)
     const stageText = computed(() => exportBusy.value ? 'Preparing download' : ({ idle: 'Model not loaded', offline: 'Connection needed', preparing: 'Preparing photo', loading: 'Loading model', ready: 'Model ready', processing: 'Removing background', compositing: 'Finishing image', complete: 'Image ready', error: 'Needs attention' })[phase.value])
     const cacheSize = computed(() => !cacheSizeKnown.value ? 'Size unavailable' : `${(cacheBytes.value / 1048576).toFixed(1)} MB`)
-    const previewStyle = computed(() => {
-      const choice = currentChoice.value
-      if (choice.kind === 'solid') return { background: choice.color }
-      if (choice.kind === 'image') return { backgroundImage: `url("${choice.url}")`, backgroundSize: 'cover', backgroundPosition: 'center' }
-      if (choice.kind === 'gradient') return { background: `linear-gradient(135deg, ${choice.colors.join(', ')})` }
-      return {}
-    })
+    function changeFrame() {
+      if (busy.value || shareBusy.value || studio.batchRunning.value || studio.finishingBusy.value) return
+      return updateExport()
+    }
+    function resetFrame() {
+      frameRatio.value = 'original'
+      framePlacement.value = 'fit'
+      return changeFrame()
+    }
 
     const studio = useSupporterStudio({
       isBusy: () => busy.value || shareBusy.value || studio.batchRunning.value || studio.presetSaving.value || studio.archiveBusy.value || studio.finishingBusy.value,
@@ -197,6 +207,10 @@ createApp({
       showOriginal.value = false
       fileName.value = ''
       dimensions.value = ''
+      sourceSize.value = { width: 1, height: 1 }
+      frameRatio.value = 'original'
+      framePlacement.value = 'fit'
+      showPhotoBounds.value = false
     }
 
     function revoke(url) { if (url) nextTick(() => URL.revokeObjectURL(url)) }
@@ -508,6 +522,7 @@ createApp({
         const decoded = memoryTracker.track(await createImageBitmap(file, { imageOrientation: 'from-image' }))
         if (id !== requestId) { closeBitmap(decoded); return }
         imageBitmap = decoded
+        sourceSize.value = { width: decoded.width, height: decoded.height }
         fileName.value = file.name
         dimensions.value = `${imageBitmap.width.toLocaleString()} × ${imageBitmap.height.toLocaleString()} px`
         showOriginal.value = false
@@ -638,15 +653,19 @@ createApp({
           exportPending = false
           const currentResult = resultUrl.value
           const choice = currentChoice.value
+          const geometry = frame.value
+          const ratio = frameRatio.value
+          const placement = framePlacement.value
+          const reframed = ratio !== 'original'
           let canvas = cutoutCanvas
           mark('encoding-export', { backdrop: choice.id })
           try {
-            if (choice.kind !== 'transparent') {
-              const inPlace = studio.batchRunning.value
+            if (choice.kind !== 'transparent' || reframed) {
+              const inPlace = studio.batchRunning.value && !reframed
               if (!inPlace) {
                 canvas = document.createElement('canvas')
-                canvas.width = cutoutCanvas.width
-                canvas.height = cutoutCanvas.height
+                canvas.width = geometry.width
+                canvas.height = geometry.height
               }
               const context = context2d(canvas)
               if (inPlace) context.globalCompositeOperation = 'destination-over'
@@ -663,13 +682,16 @@ createApp({
                   const rect = coverRect(backdrop.width, backdrop.height, canvas.width, canvas.height)
                   context.drawImage(backdrop, rect.x, rect.y, rect.width, rect.height)
                 } finally { closeBitmap(backdrop) }
-              } else context.fillRect(0, 0, canvas.width, canvas.height)
+              } else if (choice.kind !== 'transparent') context.fillRect(0, 0, canvas.width, canvas.height)
               if (inPlace) context.globalCompositeOperation = 'source-over'
-              else context.drawImage(cutoutCanvas, 0, 0)
+              else {
+                const rect = geometry.photo
+                context.drawImage(cutoutCanvas, rect.x, rect.y, rect.width, rect.height)
+              }
             }
-            const blob = choice.kind === 'transparent' ? cutoutBlob : await new Promise(resolve => canvas.toBlob(resolve, 'image/png'))
+            const blob = choice.kind === 'transparent' && !reframed ? cutoutBlob : await new Promise(resolve => canvas.toBlob(resolve, 'image/png'))
             if (!blob) throw new Error('Could not export this image. Try a smaller photo.')
-            if (currentResult !== resultUrl.value || choice.id !== selected.value) continue
+            if (currentResult !== resultUrl.value || choice.id !== selected.value || ratio !== frameRatio.value || placement !== framePlacement.value) continue
             exportThumbnail = studio.batchRunning.value ? (await createPreview(canvas, 240)).blob : null
             revoke(exportUrl.value)
             exportUrl.value = URL.createObjectURL(blob)
@@ -744,7 +766,7 @@ createApp({
     return { imageMemory, browserMemoryState, refreshMemory, memoryMB, ...studio, ...developer, updateSupporter, openGiving, givingOpen, getDiagnostics, CACHE_KEY, choices, fileInput, fileName, dimensions, originalUrl, resultUrl, exportUrl,
   selected, phase, backend, modelLoaded, downloadFile, downloadProgress, statusDetail, error,
   dragOver, showOriginal, cacheFiles, cacheBytes, cacheAvailable, origin,
-  busy, currentChoice, exportName, stageText, cacheSize, previewStyle,
+  busy, currentChoice, exportName, stageText, cacheSize, FRAME_RATIOS, frame, frameRatio, framePlacement, frameChanged, showPhotoBounds, outputDimensions, changeFrame, resetFrame,
   refreshCache, clearCache, loadModel, acceptFile, onFileChange, onDrop, clearImage,
   selectBackground, shareImage, shareBusy, canShareFile, exportMessage, exportBusy,
   copyDiagnostics, diagnosticText, diagnosticMessage, interruptedNotice, cancelRun, retryWasm, previewError, preferWasm, canRetry, APP_VERSION,

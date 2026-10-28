@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.6.0 — 2026-10-27
+
+- Add optional Output frame controls beneath the single-photo preview, collapsed
+  by default. Keep original dimensions unless a new aspect ratio is selected.
+- Offer square, portrait, story, and landscape ratios, including 9:16 and 16:9.
+  Fit the whole original photo or center-crop to fill; show the exact PNG dimensions
+  and allow a one-tap reset. New frames stay within the source pixel budget and
+  longest edge. Frames reset with each photo; batch outputs keep original sizes.
+- Add an optional dashed original-photo boundary guide that never appears in
+  downloads. Preview backdrops are clipped to the actual output frame.
+- Share frame geometry between SVG previews and canvas exports, including
+  transparent PNGs and native sharing. Keep the transparent source intact so
+  switching ratios or backdrops does not rerun the model or accumulate cropping.
+- Cover portrait-to-landscape fit/crop, pixel budgets, transparent exports, reset,
+  and repeated-worker cleanup with regression tests. Browser-check the controls
+  using a synthetic portrait and a fixture worker; physical iPhone testing remains
+  to be done.
+
 ## 1.5.3 — 2026-10-14
 
 - Disable iOS telephone format detection and move the phone-like byte divisor out

@@ -1,9 +1,9 @@
 // Generated release value; bump VERSION with scripts/release.mjs.
-const RELEASE = '1.5.3'
+const RELEASE = '1.6.0'
 const PREFIX = `cutout-shell:${new URL(self.registration.scope).pathname}:`
 const CACHE = `${PREFIX}${RELEASE}`
 const FILES = [
-  './', './index.html', './style.css', './app.js', './startup.js', './memory.js', './diagnostics.js', './pwa.js',
+  './', './index.html', './style.css', './app.js', './output-frame.js', './startup.js', './memory.js', './diagnostics.js', './pwa.js',
   './giving.js', './giving-ui.js', './qr-loader.js', './developer-preview.js', './local-store.js', './supporter-studio.js', './batch-finish.js', './zip.js', './vendor/qr-code-styling-1.9.2.js',
   './model.worker.js', './version.js', './manifest.webmanifest', './icons/logo.svg', './icons/bitcoin.svg',
   './icons/icon-192.png', './icons/icon-512.png', './icons/icon-maskable-512.png',
