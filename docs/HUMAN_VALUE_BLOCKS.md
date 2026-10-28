@@ -262,3 +262,14 @@ controls, matching previews and exports, and regression coverage. Bob continues
 monitoring and testing. This entry records the work; the next estimate update
 will allocate its value blocks. The currently estimated ledger remains
 **26 VBs / $2,600**.
+
+
+#### October 27 follow-ups · v1.6.1–v1.8.0
+
+Refined framing into direct visual ratio tiles, restored full-workspace backdrop
+previews, added manual edge/corner alignment, and corrected background seams by
+sharing preview/export coordinates. Added mask-based automatic anchor suggestions
+with manual overrides. Verified generated PNG crops and edge positions in browser
+fixtures alongside regression tests. These follow-ups belong to the current work
+period; their value-block estimate is pending the next ledger update. The recorded
+estimate remains **26 VBs / $2,600**.

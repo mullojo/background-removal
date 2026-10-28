@@ -256,3 +256,22 @@ iPhone DOM has not been inspected, so device retesting is still needed.
 Sources: [Apple telephone format detection](https://developer.apple.com/library/archive/documentation/AppleApplications/Reference/SafariHTMLRef/Articles/MetaTags.html),
 [WebKit format-detection mutation report](https://bugs.webkit.org/show_bug.cgi?id=232856),
 and [Vue's in-DOM template considerations](https://vuejs.org/guide/essentials/template-syntax.html).
+
+
+### v1.8.0 · Continuous backgrounds and suggested anchors
+
+- Choose an image backdrop with clear landmarks. Enable/disable Download outline
+  and try portrait, square, and landscape ratios: the background should be one
+  continuous image across the boundary, and the PNG should contain its outlined
+  portion. Repeat with gradients and solids.
+- Rotate the phone or resize the browser. After resizing settles, verify that
+  the PNG still matches the outlined background. Batch exports retain their own
+  original-sized backgrounds rather than following workspace shape.
+- Use a cutout touching the original bottom edge. After processing, choose 4:5
+  with Fit whole photo: Auto position should keep that edge against the bottom.
+  Try top/left/right and corner contacts; masks without clear contacts should
+  stay centered. Manual alignment must persist through ratio/backdrop changes;
+  Auto position and Reset size restore the suggestion.
+- Detection is a mask-based heuristic, not semantic recognition. Mobile device
+  testing is still needed; no additional inference or full-size pixel reads are
+  used to make the suggestion.

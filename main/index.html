@@ -62,7 +62,7 @@
       <div class="workspace">
         <section class="editor-panel" aria-label="Image editor">
           <div class="panel-head"><div><span class="section-index">01 / CANVAS</span><h2>Your workspace</h2></div><span class="panel-caption">{{ dimensions || 'READY WHEN YOU ARE' }}</span></div>
-          <div class="stage" :class="{ 'stage-drag': dragOver, 'stage-empty': !originalUrl }" :style="resultUrl && !showOriginal ? workspaceBackdrop : {}" @dragover.prevent="dragOver = true" @dragleave.prevent="dragOver = false" @drop.prevent="onDrop">
+          <div ref="stageElement" class="stage" :class="{ 'stage-drag': dragOver, 'stage-empty': !originalUrl }" @dragover.prevent="dragOver = true" @dragleave.prevent="dragOver = false" @drop.prevent="onDrop">
             <div v-if="!originalUrl" class="empty-state">
               <div class="empty-icon"><svg viewBox="0 0 48 48" fill="none" aria-hidden="true"><rect x="6" y="7" width="36" height="34" rx="4" stroke="currentColor" stroke-width="1.6"/><circle cx="17" cy="18" r="3" stroke="currentColor" stroke-width="1.6"/><path d="m8 34 11-11 7 7 5-5 9 9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
               <h3>Drop your image here</h3><p>or choose a photo to get started</p>
@@ -71,18 +71,18 @@
             </div>
             <template v-else>
               <div v-if="resultUrl && !showOriginal && selected === 'transparent'" class="checkerboard"></div>
-              <svg class="relative z-[1] block h-full w-full" :view-box.camel="`0 0 ${frame.width} ${frame.height}`" role="img" :aria-label="resultUrl && !showOriginal ? 'Output preview, ' + outputDimensions : 'Original photo in output frame'">
+              <svg class="relative z-[1] block h-full w-full" :view-box.camel="`${viewport.x} ${viewport.y} ${viewport.width} ${viewport.height}`" role="img" :aria-label="resultUrl && !showOriginal ? 'Output preview, ' + outputDimensions : 'Original photo in output frame'">
                 <defs>
                   <clipPath id="output-clip"><rect :width="frame.width" :height="frame.height" /></clipPath>
                   <pattern id="output-checker" width="24" height="24" patternUnits="userSpaceOnUse" :pattern-transform.camel="`scale(${Math.max(frame.width, frame.height) / 800})`"><rect width="24" height="24" fill="#f7f8f5" /><path d="M0 0h12v12H0zM12 12h12v12H12z" fill="#e9ece8" /></pattern>
-                  <linearGradient id="output-gradient" x1="0" y1="0" x2="1" y2="1" gradientUnits="objectBoundingBox"><stop :stop-color="currentChoice.colors?.[0] || '#ffffff'" /><stop offset="1" :stop-color="currentChoice.colors?.[1] || '#ffffff'" /></linearGradient>
+                  <linearGradient id="output-gradient" :x1="viewport.x" :y1="viewport.y" :x2="viewport.x + viewport.width" :y2="viewport.y + viewport.height" gradientUnits="userSpaceOnUse"><stop :stop-color="currentChoice.colors?.[0] || '#ffffff'" /><stop offset="1" :stop-color="currentChoice.colors?.[1] || '#ffffff'" /></linearGradient>
                 </defs>
+                <rect v-if="showOriginal || !resultUrl" :width="frame.width" :height="frame.height" fill="url(#output-checker)" />
+                <template v-if="resultUrl && !showOriginal">
+                  <rect v-if="currentChoice.kind === 'solid' || currentChoice.kind === 'gradient'" :x="viewport.x" :y="viewport.y" :width="viewport.width" :height="viewport.height" :fill="currentChoice.kind === 'solid' ? currentChoice.color : 'url(#output-gradient)'" />
+                  <image v-if="currentChoice.kind === 'image'" :href="currentChoice.url" :x="viewport.x" :y="viewport.y" :width="viewport.width" :height="viewport.height" preserveAspectRatio="xMidYMid slice" />
+                </template>
                 <g clip-path="url(#output-clip)">
-                  <rect v-if="showPhotoBounds || showOriginal || !resultUrl" :width="frame.width" :height="frame.height" fill="url(#output-checker)" />
-                  <template v-if="resultUrl && !showOriginal && showPhotoBounds">
-                    <rect v-if="currentChoice.kind === 'solid' || currentChoice.kind === 'gradient'" :width="frame.width" :height="frame.height" :fill="currentChoice.kind === 'solid' ? currentChoice.color : 'url(#output-gradient)'" />
-                    <image v-if="currentChoice.kind === 'image'" :href="currentChoice.url" :width="frame.width" :height="frame.height" preserveAspectRatio="xMidYMid slice" />
-                  </template>
                   <image :href="resultUrl && !showOriginal ? resultUrl : originalUrl" :x="frame.photo.x" :y="frame.photo.y" :width="frame.photo.width" :height="frame.photo.height" preserveAspectRatio="none" @error="previewError" />
                 </g>
                 <g v-if="showPhotoBounds" fill="none" pointer-events="none">
@@ -128,7 +128,8 @@
                 </div>
                 <div class="min-w-0 flex-1 basis-28">
                   <h4 class="m-0 text-xs font-semibold">Anchor photo <span class="font-normal text-muted">· {{ currentAnchor.label }}</span></h4>
-                  <p class="mt-2 mb-0 text-[11px] leading-relaxed text-muted">Keep a flat edge against the frame. Choose Bottom for a portrait cut off at the waist, or any other edge or corner.</p>
+                  <button class="mt-2 min-h-11 rounded-lg border px-3 text-xs font-semibold" :class="anchorMode === 'auto' ? 'border-forest bg-forest text-white' : 'border-line bg-white text-muted'" :aria-pressed="anchorMode === 'auto'" @click="useSuggestedAnchor">Auto position</button>
+                  <p class="mt-2 mb-0 text-[11px] leading-relaxed text-muted">{{ anchorMode === 'auto' ? (frameAnchor === 'center' ? 'No single edge detected. Centered for a balanced start; you can choose another position.' : 'Positioned from where the cutout meets the original photo’s edges. You can choose another position.') : 'Your position is saved for this photo. Auto position returns to the detected edge.' }}</p>
                 </div>
               </div>
               <p class="mt-3 mb-0 text-[11px] leading-relaxed text-muted">The backdrop fills your workspace. Turn on Download outline to see the exact saved area{{ frameChanged ? '' : ' — your original photo dimensions' }}. Guides won’t appear in your PNG.</p>

@@ -1,7 +1,7 @@
 import { createApp, computed, nextTick, onMounted, onUnmounted, ref } from './vendor/vue-3.5.43.esm-browser.prod.js'
 import { APP_VERSION, createDiagnostics } from './diagnostics.js'
 import { createMemoryTracker, browserMemory, memoryMB } from './memory.js'
-import { FRAME_RATIOS, FRAME_ANCHORS, outputFrame } from './output-frame.js'
+import { FRAME_RATIOS, FRAME_ANCHORS, outputFrame, frameViewport, detectMaskAnchor } from './output-frame.js'
 import { createPwa } from './pwa.js'
 import { useDeveloperPreview } from './developer-preview.js'
 import { GivingPanel } from './giving-ui.js'
@@ -38,6 +38,10 @@ createApp({
     const frameRatio = ref('original')
     const framePlacement = ref('fit')
     const frameAnchor = ref('center')
+    const suggestedAnchor = ref('center')
+    const anchorMode = ref('auto')
+    const stageElement = ref(null)
+    const workspaceSize = ref({ width: 0, height: 0 })
     const currentAnchor = computed(() => FRAME_ANCHORS.find(anchor => anchor.id === frameAnchor.value) || FRAME_ANCHORS[4])
     const showPhotoBounds = ref(false)
     const frameOptionsOpen = ref(false)
@@ -50,6 +54,7 @@ createApp({
     const frame = computed(() => outputFrame(sourceSize.value.width, sourceSize.value.height, frameRatio.value, framePlacement.value, frameAnchor.value))
     const outputDimensions = computed(() => `${frame.value.width.toLocaleString()} × ${frame.value.height.toLocaleString()} px`)
     const frameChanged = computed(() => frameRatio.value !== 'original')
+    const viewport = computed(() => frameViewport(frame.value, studio.batchRunning.value ? 0 : workspaceSize.value.width, studio.batchRunning.value ? 0 : workspaceSize.value.height))
     const originalUrl = ref('')
     const resultUrl = ref('')
     const exportUrl = ref('')
@@ -98,19 +103,18 @@ createApp({
     let pwa
     let batchCompletion = null
     let composeTask = null
+    let stageObserver
+    let resizeTimer
+    let exportedViewport
 
     const busy = computed(() => exportBusy.value || ['preparing', 'loading', 'processing', 'compositing'].includes(phase.value))
     const currentChoice = computed(() => choices.value.find(choice => choice.id === selected.value) || choices.value[0])
     const exportName = computed(() => `${fileName.value.replace(/\.[^.]+$/, '') || 'image'}-${currentChoice.value.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'backdrop'}.png`)
     const stageText = computed(() => exportBusy.value ? 'Preparing download' : ({ idle: 'Model not loaded', offline: 'Connection needed', preparing: 'Preparing photo', loading: 'Loading model', ready: 'Model ready', processing: 'Removing background', compositing: 'Finishing image', complete: 'Image ready', error: 'Needs attention' })[phase.value])
     const cacheSize = computed(() => !cacheSizeKnown.value ? 'Size unavailable' : `${(cacheBytes.value / 1048576).toFixed(1)} MB`)
-    const workspaceBackdrop = computed(() => {
-      const choice = currentChoice.value
-      if (choice.kind === 'solid') return { background: choice.color }
-      if (choice.kind === 'gradient') return { background: `linear-gradient(135deg, ${choice.colors.join(', ')})` }
-      if (choice.kind === 'image') return { backgroundImage: `url("${choice.url}")`, backgroundSize: 'cover', backgroundPosition: 'center' }
-      return {}
-    })
+    function sameViewport(a, b) {
+      return a && b && a.x === b.x && a.y === b.y && a.width === b.width && a.height === b.height
+    }
     function selectFrameRatio(id) {
       if (busy.value || shareBusy.value || studio.batchRunning.value || studio.presetSaving.value || studio.archiveBusy.value || studio.finishingBusy.value) return
       frameRatio.value = id
@@ -119,7 +123,14 @@ createApp({
     }
     function selectFrameAnchor(id) {
       if (busy.value || shareBusy.value || studio.batchRunning.value || studio.presetSaving.value || studio.archiveBusy.value || studio.finishingBusy.value) return
+      anchorMode.value = 'manual'
       frameAnchor.value = id
+      return updateExport()
+    }
+    function useSuggestedAnchor() {
+      if (busy.value || shareBusy.value || studio.batchRunning.value || studio.presetSaving.value || studio.archiveBusy.value || studio.finishingBusy.value) return
+      anchorMode.value = 'auto'
+      frameAnchor.value = suggestedAnchor.value
       return updateExport()
     }
     function changeFrame() {
@@ -129,7 +140,8 @@ createApp({
     function resetFrame() {
       frameRatio.value = 'original'
       framePlacement.value = 'fit'
-      frameAnchor.value = 'center'
+      anchorMode.value = 'auto'
+      frameAnchor.value = suggestedAnchor.value
       return changeFrame()
     }
 
@@ -240,6 +252,9 @@ createApp({
       frameRatio.value = 'original'
       framePlacement.value = 'fit'
       frameAnchor.value = 'center'
+      suggestedAnchor.value = 'center'
+      anchorMode.value = 'auto'
+      exportedViewport = null
       showPhotoBounds.value = false
     }
 
@@ -603,6 +618,8 @@ createApp({
 
     async function compose(mask) {
       const id = requestId
+      suggestedAnchor.value = detectMaskAnchor(mask)
+      if (anchorMode.value === 'auto') frameAnchor.value = suggestedAnchor.value
       if (!sourceFile) throw new Error('The original photo is no longer available. Please choose it again.')
       mark('export-image-decoding')
       const bitmap = memoryTracker.track(await createImageBitmap(sourceFile, { imageOrientation: 'from-image' }))
@@ -684,6 +701,7 @@ createApp({
           const currentResult = resultUrl.value
           const choice = currentChoice.value
           const geometry = frame.value
+          const layout = viewport.value
           const ratio = frameRatio.value
           const placement = framePlacement.value
           const anchor = frameAnchor.value
@@ -702,7 +720,7 @@ createApp({
               if (inPlace) context.globalCompositeOperation = 'destination-over'
               if (choice.kind === 'solid') context.fillStyle = choice.color
               else if (choice.kind === 'gradient') {
-                const gradient = context.createLinearGradient(0, 0, canvas.width, canvas.height)
+                const gradient = context.createLinearGradient(layout.x, layout.y, layout.x + layout.width, layout.y + layout.height)
                 gradient.addColorStop(0, choice.colors[0])
                 gradient.addColorStop(1, choice.colors[1])
                 context.fillStyle = gradient
@@ -710,8 +728,8 @@ createApp({
               if (choice.kind === 'image') {
                 const backdrop = memoryTracker.track(await createImageBitmap(choice.blob))
                 try {
-                  const rect = coverRect(backdrop.width, backdrop.height, canvas.width, canvas.height)
-                  context.drawImage(backdrop, rect.x, rect.y, rect.width, rect.height)
+                  const rect = coverRect(backdrop.width, backdrop.height, layout.width, layout.height)
+                  context.drawImage(backdrop, rect.x + layout.x, rect.y + layout.y, rect.width, rect.height)
                 } finally { closeBitmap(backdrop) }
               } else if (choice.kind !== 'transparent') context.fillRect(0, 0, canvas.width, canvas.height)
               if (inPlace) context.globalCompositeOperation = 'source-over'
@@ -722,10 +740,11 @@ createApp({
             }
             const blob = choice.kind === 'transparent' && !reframed ? cutoutBlob : await new Promise(resolve => canvas.toBlob(resolve, 'image/png'))
             if (!blob) throw new Error('Could not export this image. Try a smaller photo.')
-            if (currentResult !== resultUrl.value || choice.id !== selected.value || ratio !== frameRatio.value || placement !== framePlacement.value || anchor !== frameAnchor.value) continue
+            if (currentResult !== resultUrl.value || choice.id !== selected.value || ratio !== frameRatio.value || placement !== framePlacement.value || anchor !== frameAnchor.value || !sameViewport(layout, viewport.value)) continue
             exportThumbnail = studio.batchRunning.value ? (await createPreview(canvas, 240)).blob : null
             revoke(exportUrl.value)
             exportUrl.value = URL.createObjectURL(blob)
+            exportedViewport = layout
             exportFile = new File([blob], exportName.value, { type: 'image/png' })
             canShareFile.value = Boolean(navigator.share && navigator.canShare?.({ files: [exportFile] }))
             exportMessage.value = ''
@@ -760,10 +779,28 @@ createApp({
           exportMessage.value = 'Sharing could not open. Use Download image instead.'
           diagnostics.record('share-error', errorDetails(cause))
         }
-      } finally { shareBusy.value = false; runQueuedFile() }
+      } finally {
+        shareBusy.value = false
+        if (cutoutBlob && !sameViewport(exportedViewport, viewport.value)) updateExport()
+        runQueuedFile()
+      }
     }
 
     onMounted(() => {
+      if (typeof ResizeObserver !== 'undefined' && stageElement.value) {
+        // Resize math uses CSS pixels only; no canvas or image buffers are added.
+        stageObserver = new ResizeObserver(entries => {
+          const { width, height } = entries[0].contentRect
+          if (!(width > 0 && height > 0)) return
+          clearTimeout(resizeTimer)
+          resizeTimer = setTimeout(() => {
+            if (workspaceSize.value.width === width && workspaceSize.value.height === height) return
+            workspaceSize.value = { width, height }
+            if (cutoutBlob && ['complete', 'compositing'].includes(phase.value) && !shareBusy.value && !studio.batchRunning.value) updateExport()
+          }, 120)
+        })
+        stageObserver.observe(stageElement.value)
+      }
       studio.initialize()
       developer.initializeDeveloperPreview()
       mark('app-opened', { version: APP_VERSION }, false)
@@ -784,6 +821,8 @@ createApp({
       loadModel()
     })
     onUnmounted(() => {
+      stageObserver?.disconnect()
+      clearTimeout(resizeTimer)
       studio.disposeStudio()
       pwa?.dispose()
       clearTimeout(slowTimer)
@@ -797,7 +836,7 @@ createApp({
     return { imageMemory, browserMemoryState, refreshMemory, memoryMB, ...studio, ...developer, updateSupporter, openGiving, givingOpen, getDiagnostics, CACHE_KEY, choices, fileInput, fileName, dimensions, originalUrl, resultUrl, exportUrl,
   selected, phase, backend, modelLoaded, downloadFile, downloadProgress, statusDetail, error,
   dragOver, showOriginal, cacheFiles, cacheBytes, cacheAvailable, origin,
-  busy, currentChoice, exportName, stageText, cacheSize, FRAME_ANCHORS, frameAnchor, currentAnchor, selectFrameAnchor, frameOptions, frameOptionsOpen, selectFrameRatio, workspaceBackdrop, frame, frameRatio, framePlacement, frameChanged, showPhotoBounds, outputDimensions, changeFrame, resetFrame,
+  busy, currentChoice, exportName, stageText, cacheSize, FRAME_ANCHORS, frameAnchor, currentAnchor, selectFrameAnchor, frameOptions, frameOptionsOpen, selectFrameRatio, stageElement, viewport, anchorMode, useSuggestedAnchor, frame, frameRatio, framePlacement, frameChanged, showPhotoBounds, outputDimensions, changeFrame, resetFrame,
   refreshCache, clearCache, loadModel, acceptFile, onFileChange, onDrop, clearImage,
   selectBackground, shareImage, shareBusy, canShareFile, exportMessage, exportBusy,
   copyDiagnostics, diagnosticText, diagnosticMessage, interruptedNotice, cancelRun, retryWasm, previewError, preferWasm, canRetry, APP_VERSION,

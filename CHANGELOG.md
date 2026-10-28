@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.8.0 — 2026-10-27
+
+- Draw each backdrop once across the full workspace. Share its coordinates with
+  PNG exports so image backgrounds and gradients remain continuous across the
+  download outline instead of showing two differently scaled backgrounds.
+- Recalculate that crop after workspace resizing or rotation; keep batch exports
+  independent of workspace dimensions. Preserve the existing canvas cleanup and
+  safe PWA update behavior.
+- Suggest a starting photo anchor from sustained foreground contact with the
+  original mask edges. Ignore isolated specks and keep ambiguous masks centered.
+  Reuse the small inference mask without extra full-resolution reads or inference.
+- Keep manual anchors and add Auto position to restore the suggestion. Resetting
+  the frame restores the suggestion; a new photo gets a fresh detection.
+- Verify geometry, noisy/ambiguous masks, corners, manual override, and worker
+  lifecycle behavior with regression coverage.
+
 ## 1.7.0 — 2026-10-27
 
 - Add a compact, visual nine-position photo-anchor control under Output frame.

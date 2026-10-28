@@ -71,7 +71,10 @@ test('successive photos get new workers after releasing prior image resources', 
         assert.equal(++this.processes, 1)
         queueMicrotask(() => {
           this.onmessage({ data: { type: 'processing', id: message.id } })
-          this.onmessage({ data: { type: 'result', id: message.id, width: 2, height: 2, channels: 1, pixels: new Uint8Array([0, 128, 255, 255]) } })
+          const smartMask = workers.length === 3
+          const size = smartMask ? 100 : 2
+          const pixels = smartMask ? Uint8Array.from({ length: size * size }, (_, i) => i % size > 30 && i % size < 70 && Math.floor(i / size) > 20 ? 255 : 0) : new Uint8Array([0, 128, 255, 255])
+          this.onmessage({ data: { type: 'result', id: message.id, width: size, height: size, channels: 1, pixels } })
         })
       } else queueMicrotask(() => this.onmessage({ data: { type: 'ready', backend: 'WebGPU · FP16' } }))
     }
@@ -146,6 +149,13 @@ test('successive photos get new workers after releasing prior image resources', 
     if (oldURL) assert.ok(!urls.has(oldURL))
   }
   assert.equal(preparingExports, 3)
+  assert.equal(app.frameAnchor.value, 'bottom', 'An actual worker mask chooses the starting anchor')
+  await app.selectFrameAnchor('top')
+  assert.equal(app.anchorMode.value, 'manual')
+  assert.equal(app.frameAnchor.value, 'top')
+  await app.useSuggestedAnchor()
+  assert.equal(app.frameAnchor.value, 'bottom')
+  assert.equal(app.anchorMode.value, 'auto')
   // Reframe the already processed photo without touching inference or source.
   await app.selectFrameRatio('16:9')
   assert.equal(app.showPhotoBounds.value, true, 'Picking a ratio immediately reveals its saved boundaries')
@@ -165,7 +175,7 @@ test('successive photos get new workers after releasing prior image resources', 
   assert.ok(app.frame.value.photo.x < 0, 'Fill crops the wider source')
   await app.resetFrame()
   assert.equal(app.frameRatio.value, 'original')
-  assert.equal(app.frameAnchor.value, 'center')
+  assert.equal(app.frameAnchor.value, 'bottom', 'Reset restores the suggested anchor')
   assert.equal(app.frame.value.width, 2000)
   const previous = workers[0]
   assert.equal(previous.onmessage, null)

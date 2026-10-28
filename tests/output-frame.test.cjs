@@ -73,3 +73,47 @@ test('anchors retain the chosen edge during crops and handle all corners', async
   }
   assert.deepEqual(outputFrame(900, 1600, '1:1', 'fit', 'invalid'), outputFrame(900, 1600, '1:1'))
 })
+
+
+test('workspace coordinates preserve the exact centered output crop across shapes', async () => {
+  const { outputFrame, frameViewport } = await modulePromise
+  for (const ratio of ['original', '4:5', '16:9']) {
+    const frame = outputFrame(930, 1478, ratio)
+    for (const [width, height] of [[750, 490], [340, 440]]) {
+      const viewport = frameViewport(frame, width, height)
+      assert.ok(Math.abs(viewport.width / viewport.height - width / height) < 1e-8)
+      assert.ok(Math.abs(viewport.x + viewport.width / 2 - frame.width / 2) < 1e-8)
+      assert.ok(Math.abs(viewport.y + viewport.height / 2 - frame.height / 2) < 1e-8)
+      assert.ok(viewport.x <= 0 && viewport.y <= 0)
+    }
+  }
+  assert.deepEqual(frameViewport({ width: 900, height: 1600 }, 0, 0), { x: 0, y: 0, width: 900, height: 1600 })
+})
+
+function maskWith(draw, channels = 1) {
+  const width = 100, height = 100, pixels = new Uint8Array(width * height * channels)
+  for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) pixels[(y * width + x) * channels] = draw(x, y) ? 255 : 0
+  return { width, height, channels, pixels }
+}
+
+test('smart anchors detect sustained contacts, corners, and soft edge masks', async () => {
+  const { detectMaskAnchor } = await modulePromise
+  assert.equal(detectMaskAnchor(maskWith((x, y) => x > 30 && x < 70 && y > 20)), 'bottom')
+  assert.equal(detectMaskAnchor(maskWith((x, y) => x > 30 && x < 70 && y < 80)), 'top')
+  assert.equal(detectMaskAnchor(maskWith((x, y) => y > 30 && y < 70 && x > 20)), 'right')
+  assert.equal(detectMaskAnchor(maskWith((x, y) => y > 30 && y < 70 && x < 80)), 'left')
+  assert.equal(detectMaskAnchor(maskWith((x, y) => x > 30 && y > 30)), 'bottom-right')
+  assert.equal(detectMaskAnchor(maskWith((x, y) => x < 70 && y < 70, 4)), 'top-left')
+  const soft = maskWith((x, y) => x > 30 && x < 70 && y > 20)
+  soft.pixels = soft.pixels.map(value => value ? 210 : 0)
+  assert.equal(detectMaskAnchor(soft), 'bottom')
+})
+
+test('smart anchors stay centered for isolated noise, detached subjects, and ambiguous edges', async () => {
+  const { detectMaskAnchor } = await modulePromise
+  assert.equal(detectMaskAnchor(maskWith((x, y) => x === 50 && y === 99)), 'center')
+  assert.equal(detectMaskAnchor(maskWith((x, y) => x > 20 && x < 80 && y > 10 && y < 90)), 'center')
+  assert.equal(detectMaskAnchor(maskWith(() => true)), 'center')
+  assert.equal(detectMaskAnchor(maskWith(() => false)), 'center')
+  assert.equal(detectMaskAnchor(maskWith((x, y) => x > 30 && x < 70)), 'center')
+})
